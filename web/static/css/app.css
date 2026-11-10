@@ -291,7 +291,7 @@ html.glass .panel, html.glass .stat, html.glass .list, html.glass .folder { back
 .rail { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(240px, 260px); gap: 16px; overflow-x: auto; padding: 2px 2px 10px; scroll-snap-type: x proximity; }
 .rail > * { scroll-snap-align: start; }
 .card { position: relative; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.card-thumb { position: relative; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 10px; background: rgb(var(--raised)); border: 1px solid rgb(var(--line) / 0.8); }
+.card-thumb { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; position: relative; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 10px; background: rgb(var(--raised)); border: 1px solid rgb(var(--line) / 0.8); }
 .card-thumb img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s ease, opacity 0.3s; opacity: 0; }
 .card-thumb img.loaded { opacity: 1; }
 .card:hover .card-thumb { border-color: rgb(var(--faint)); }
@@ -658,6 +658,8 @@ body.watching { background: #000; }
   .p-time { margin: 0 4px; }
   .p-btn { width: 36px; height: 36px; }
   .card-overlay { display: none; }
+  .card > a { -webkit-touch-callout: none; }
+  .card-thumb img { -webkit-user-drag: none; }
   dialog.modal.settings-modal { width: 100vw; height: 100dvh; max-height: none; max-width: none; border-radius: 0; margin: 0; }
   .settings-wrap { flex-direction: column; }
   .settings-nav { width: auto; display: flex; gap: 4px; overflow-x: auto; border-right: 0; border-bottom: 1px solid rgb(var(--line)); }

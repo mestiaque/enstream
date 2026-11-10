@@ -2,8 +2,9 @@
 // one-second pieces from across the whole video. The server makes these clips in the
 // background (small 480p files, so they start at once and loop). A video without a clip yet
 // (just added) plays pieces of the original file instead, and the request moves it to the
-// front of the server's queue. Mouse only (touch screens and TVs have no hover), one preview
-// at a time, and it can be turned off in Settings → Appearance.
+// front of the server's queue. On touch screens, pressing and holding a card starts the preview
+// (a quick tap still opens the video). One preview at a time; it can be turned off in
+// Settings → Appearance.
 import { h } from "./dom.js";
 import { streamURL } from "./api.js";
 import { prefs } from "./store.js";
@@ -11,6 +12,8 @@ import { prefs } from "./store.js";
 const POINTS = [0.1, 0.25, 0.4, 0.55, 0.7, 0.85];
 const PIECE_SECONDS = 2.5;
 const START_DELAY = 250; // ms of resting before anything loads
+const HOLD_DELAY = 350; // ms a finger rests on a card before its preview starts
+const MOVE_SLOP = 10; // px a finger may move while holding (more is a scroll)
 const CLIP_PIECES = 10; // pieces in a server clip, one second each
 const CLIP_MIN_DURATION = 20; // shorter videos get no clip
 const previewURL = (id) => `/api/v1/videos/${id}/preview`;
@@ -30,10 +33,63 @@ export function attachPreview(thumb, v) {
     clearTimeout(timer);
     timer = setTimeout(() => (hasClip ? startClip(thumb, v) : start(thumb, v)), START_DELAY);
   });
-  thumb.addEventListener("pointerleave", () => {
+  thumb.addEventListener("pointerleave", (e) => {
+    if (e.pointerType !== "mouse") return;
     clearTimeout(timer);
     if (active?.thumb === thumb) stop();
   });
+  holdToPreview(thumb, () => (hasClip ? startClip(thumb, v) : start(thumb, v)));
+}
+
+// Touch: press and hold plays the preview, which keeps playing after the finger lifts until
+// the card scrolls away, another card is touched or the page changes. Moving the finger is a
+// scroll and cancels; a quick tap opens the video as before, also while its preview plays.
+function holdToPreview(thumb, go) {
+  let hold = null;
+  let held = false;
+  let x = 0;
+  let y = 0;
+  const cancel = () => { clearTimeout(hold); hold = null; };
+  thumb.addEventListener("pointerdown", (e) => {
+    if (e.pointerType !== "touch" || !enabled()) return;
+    held = false;
+    x = e.clientX; y = e.clientY;
+    cancel();
+    if (active?.thumb === thumb) return; // already playing: this touch is a tap to open
+    hold = setTimeout(() => {
+      hold = null;
+      held = true;
+      navigator.vibrate?.(8);
+      go();
+      untilGone(thumb);
+    }, HOLD_DELAY);
+  });
+  thumb.addEventListener("pointermove", (e) => {
+    if (hold && Math.hypot(e.clientX - x, e.clientY - y) > MOVE_SLOP) cancel();
+  });
+  thumb.addEventListener("pointerup", cancel);
+  thumb.addEventListener("pointercancel", cancel); // the browser started scrolling
+  // The press that started a preview must not also open the video or show a menu.
+  thumb.addEventListener("click", (e) => {
+    if (!held) return;
+    held = false;
+    e.preventDefault();
+    e.stopPropagation();
+  }, true);
+  thumb.addEventListener("contextmenu", (e) => { if (held || hold) e.preventDefault(); });
+}
+
+// Ends a touch-started preview once its card is mostly scrolled away or another spot is touched.
+function untilGone(thumb) {
+  const done = () => {
+    io.disconnect();
+    document.removeEventListener("pointerdown", outside, true);
+    if (active?.thumb === thumb) stop();
+  };
+  const io = new IntersectionObserver(([en]) => { if (en.intersectionRatio < 0.4) done(); }, { threshold: [0, 0.4] });
+  const outside = (e) => { if (!thumb.contains(e.target)) done(); };
+  io.observe(thumb);
+  document.addEventListener("pointerdown", outside, true);
 }
 
 function makeVideo() {
