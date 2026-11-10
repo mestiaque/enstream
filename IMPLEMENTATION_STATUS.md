@@ -40,11 +40,40 @@ ENPost). Legend: ✅ implemented and tested · 🔶 implemented, not fully teste
 - ✅ Tests: every range form, malformed ranges, HEAD, If-Range, 20 concurrent clients reading different ranges, invalid ids, symlink escape, deleted file
 - ✅ Checked on the real binary over the LAN address: HEAD 200, range 206, out-of-range 416; FFprobe read the video over HTTP by seeking with ranges
 
-## Phase 4: Frontend ⬜
-Dashboard, library (grid/list, search, sort, filters, pagination, lazy thumbnails), details, custom player, mobile layout.
+## Phase 4: Frontend ✅
+Vanilla ES modules embedded in the binary; no build step, no CDN. CSP stays `'self'` only (no inline script/style), and all
+metadata goes into the DOM as text nodes.
+
+- **Shell** (`web/static/js/shell.js`): History-API router, sidebar + mobile bottom navigation, global search (`/` shortcut,
+  300 ms debounce), one scan-status poller (1 s while scanning, 15 s idle, 60 s in a hidden tab) with a finish toast.
+  `app.js` is only the versioned entry so every other module is loaded once.
+- **Home**: greeting, Resume/Scan actions, library stats, Continue Watching and Recently Added rails, LAN addresses to copy.
+- **All videos / Recently added**: grid or list (remembered), folder/format/resolution/watched filters with removable chips,
+  9 sort orders, pagination, lazy WebP thumbnails, URL-synced state (back button works), skeleton loading.
+- **Continue watching / History**: progress, device name, per-item remove, clear all (confirm dialog).
+- **Details**: poster, resume/start over, mark watched, reset progress, copy stream link (for VLC), browser compatibility
+  note, full technical metadata.
+- **Player** (`views/player.js`): custom controls (timeline with buffer + hover time, volume, speed, subtitles menu, PiP,
+  fullscreen incl. iPhone), resume, previous/next from the list it was opened from, auto-next with countdown, keyboard
+  shortcuts (ignored while typing), touch: tap to show controls, double-tap sides to seek, Media Session (lock screen),
+  progress every 10 s + on pause/seek/end/tab hide; `sendBeacon` on page close. Unsupported codecs get a clear message.
+- **Folders & scan**: add (path + name), per-folder scan, remove (confirm), live progress with cancel, retry failed,
+  recent scans table.
+- **Settings**: device name, devices list, auto-next, server/FFmpeg status, network addresses, shortcuts, About.
+
+API added for the UI: `GET /dashboard`, `PUT|POST /videos/{id}/progress`, `POST /videos/{id}/completed`,
+`GET /continue-watching`, `GET|DELETE /history`, `DELETE /history/{id}`, `GET /devices`, `PUT /devices/current`,
+`DELETE /devices/{id}`, `GET /videos/{id}/subtitles/{sid}` (SRT/VTT → WebVTT in Go, ASS/SSA via FFmpeg; the file must
+lie inside the video's folder; non-UTF-8 SRT is read as Windows-1252).
+
+Verified: Go tests (incl. `-race`), plus a headless-Chrome run against the real binary with a demo library: resume,
+subtitles, speed, seek, pause-saves-progress, Esc, search, list view, 4K filter, next-up overlay, mobile menu, no stray
+`null`/`undefined` text on any page, no console errors.
 
 ## Phase 5: Advanced ⬜
-Continue Watching, history, subtitles in the player (SRT→VTT), devices, settings UI, scanner controls, optional PIN authentication.
+Done early in phase 4: Continue Watching, history, subtitles, devices, scanner controls.
+Remaining: settings API + UI (scan interval, extensions, workers), automatic periodic scans, optional PIN
+authentication, database backup/restore from the UI.
 
 ## Phase 6: Release ⬜
 README and docs (architecture, API, database, security, deployment, development), release builds.

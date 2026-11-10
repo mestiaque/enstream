@@ -4,24 +4,40 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0f1013" />
+    <meta name="color-scheme" content="dark" />
     <title>ENStream</title>
     <link rel="icon" href="/static/assets/enstream-icon.svg?v={{VERSION}}" type="image/svg+xml" />
     <link rel="stylesheet" href="/static/css/app.css?v={{VERSION}}" />
+    <link rel="modulepreload" href="/static/js/app.js?v={{VERSION}}" />
   </head>
   <body>
-    <main class="boot" id="app">
-      <img src="/static/assets/enstream-icon.svg?v={{VERSION}}" alt="" width="72" height="72" />
-      <h1>ENStream</h1>
-      <p class="muted">Your Personal Cinema</p>
-      <section class="card" aria-live="polite">
-        <div class="row"><span>Server</span><strong id="status">Connecting…</strong></div>
-        <div class="row"><span>Version</span><span id="version">…</span></div>
-        <div class="row"><span>FFmpeg</span><span id="ffmpeg">…</span></div>
-        <div class="row"><span>FFprobe</span><span id="ffprobe">…</span></div>
-        <div class="urls"><span>Open on your phone, TV or another computer</span><ul id="urls"></ul></div>
-      </section>
-      <p class="muted small">The video library arrives in the next development phase.</p>
-    </main>
-    <script src="/static/js/boot.js?v={{VERSION}}"></script>
+    <a class="skip" href="#view">Skip to content</a>
+    <div class="shell" id="shell">
+      <aside class="sidebar" id="sidebar" aria-label="Main">
+        <a class="brand" href="/" data-link>
+          <img src="/static/assets/enstream-icon.svg?v={{VERSION}}" alt="" width="34" height="34" />
+          <span><strong>ENStream</strong><small>Your Personal Cinema</small></span>
+        </a>
+        <nav class="nav" id="nav"></nav>
+        <div class="sidebar-foot" id="sidebar-foot"></div>
+      </aside>
+      <div class="column">
+        <header class="topbar" id="topbar">
+          <button class="icon-btn only-mobile" id="menu-btn" type="button" aria-label="Open menu"></button>
+          <form class="search" id="search-form" role="search">
+            <span class="search-icon" id="search-icon"></span>
+            <input id="search" type="search" placeholder="Search your library" autocomplete="off" spellcheck="false" aria-label="Search videos" maxlength="200" />
+            <kbd class="only-desktop">/</kbd>
+          </form>
+          <a class="scan-pill" id="scan-pill" href="/folders" data-link hidden></a>
+        </header>
+        <main class="view" id="view" tabindex="-1"></main>
+      </div>
+    </div>
+    <nav class="bottom-nav" id="bottom-nav" aria-label="Main"></nav>
+    <div class="scrim" id="scrim" hidden></div>
+    <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+    <noscript><p class="noscript">ENStream needs JavaScript to show your library.</p></noscript>
+    <script type="module" src="/static/js/app.js?v={{VERSION}}"></script>
   </body>
 </html>

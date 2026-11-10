@@ -9,6 +9,7 @@ import (
 
 	"enstream/internal/handlers"
 	"enstream/internal/network"
+	"enstream/internal/playback"
 	"enstream/internal/security"
 	"enstream/internal/server"
 	"enstream/internal/streaming"
@@ -42,8 +43,9 @@ func (a *App) Handler() (http.Handler, error) {
 	}
 	folders := &handlers.Folders{Store: a.Store, Scanner: a.Scanner, Log: a.Log}
 	scans := &handlers.Scanner{Store: a.Store, Scanner: a.Scanner, Log: a.Log}
-	videos := &handlers.Videos{Store: a.Store, Paths: a.Paths, Log: a.Log}
+	videos := &handlers.Videos{Store: a.Store, Paths: a.Paths, FFmpeg: a.FFmpeg, Log: a.Log}
 	stream := &streaming.Handler{Store: a.Store, Log: a.Log}
+	play := &handlers.Playback{Store: a.Store, Service: &playback.Service{Store: a.Store}, Scanner: a.Scanner, Log: a.Log}
 	front, err := server.Frontend(web.Files, Version)
 	if err != nil {
 		return nil, err
@@ -76,6 +78,19 @@ func (a *App) Handler() (http.Handler, error) {
 			r.Get("/videos/{id}/thumbnail", videos.Thumbnail)
 			r.Get("/videos/{id}/stream", stream.Stream)
 			r.Head("/videos/{id}/stream", stream.Stream)
+			r.Get("/videos/{id}/subtitles/{sid}", videos.Subtitle)
+			r.Put("/videos/{id}/progress", play.Progress)
+			r.Post("/videos/{id}/progress", play.Progress) // navigator.sendBeacon
+			r.Post("/videos/{id}/completed", play.Completed)
+
+			r.Get("/dashboard", play.Dashboard)
+			r.Get("/continue-watching", play.ContinueWatching)
+			r.Get("/history", play.History)
+			r.Delete("/history", play.ClearHistory)
+			r.Delete("/history/{id}", play.DeleteHistory)
+			r.Get("/devices", play.Devices)
+			r.Put("/devices/current", play.NameDevice)
+			r.Delete("/devices/{id}", play.DeleteDevice)
 		},
 		Frontend: front,
 	}), nil

@@ -10,14 +10,17 @@ import (
 
 	"enstream/internal/config"
 	repo "enstream/internal/database/repositories"
+	"enstream/internal/media"
+	"enstream/internal/playback"
 	"enstream/internal/security"
 	"enstream/internal/server"
 )
 
 type Videos struct {
 	Store *repo.Store
-	Paths config.Paths
-	Log   *slog.Logger
+	Paths  config.Paths
+	FFmpeg *media.Tool
+	Log    *slog.Logger
 }
 
 const maxPageSize = 100
@@ -116,7 +119,8 @@ func (h *Videos) Get(w http.ResponseWriter, r *http.Request) {
 		internal(w, r, h.Log, err)
 		return
 	}
-	server.OK(w, map[string]any{"video": v, "subtitles": subs})
+	resume := playback.ResumeFrom(v.Position, v.Duration, v.Completed)
+	server.OK(w, map[string]any{"video": v, "subtitles": subs, "resume_from": resume})
 }
 
 // Thumbnail serves the generated WebP. The stored path must lie in the thumbnails folder.
@@ -162,4 +166,60 @@ func (h *Videos) Extensions(w http.ResponseWriter, r *http.Request) {
 		exts = []string{}
 	}
 	server.OK(w, exts)
+}
+
+// Subtitle serves an external subtitle as WebVTT (what <track> understands).
+// The file must still lie inside the video's media folder.
+func (h *Videos) Subtitle(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	sid, ok := pathID(w, r, "sid")
+	if !ok {
+		return
+	}
+	sub, err := h.Store.Subtitle(r.Context(), id, sid)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	f, err := h.Store.VideoFile(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	real, err := security.ResolveInside(sub.FilePath, f.FolderPath)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	fi, err := os.Stat(real)
+	if err != nil || !fi.Mode().IsRegular() || fi.Size() > media.MaxSubtitleSize {
+		http.NotFound(w, r)
+		return
+	}
+	var out []byte
+	switch sub.Format {
+	case "srt", "vtt":
+		data, err := os.ReadFile(real)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		if sub.Format == "srt" {
+			out = media.SRTToVTT(data)
+		} else {
+			out = media.NormalizeVTT(data)
+		}
+	default:
+		if out, err = media.ConvertWithFFmpeg(r.Context(), h.FFmpeg, real); err != nil {
+			h.Log.Warn("subtitle conversion failed", "subtitle", sid, "error", err)
+			server.Fail(w, http.StatusUnprocessableEntity, "SUBTITLE_UNSUPPORTED", "This subtitle could not be converted")
+			return
+		}
+	}
+	w.Header().Set("Content-Type", "text/vtt; charset=utf-8")
+	w.Header().Set("Cache-Control", "private, max-age=300")
+	w.Write(out)
 }

@@ -158,3 +158,92 @@ func itoa64(n int64) string {
 	b, _ := json.Marshal(n)
 	return string(b)
 }
+
+func TestPlaybackHistoryDevicesAndSubtitles(t *testing.T) {
+	a, h := newTestApp(t)
+	media := t.TempDir()
+	clip(t, filepath.Join(media, "Talk.mp4"))
+	os.WriteFile(filepath.Join(media, "Talk.en.srt"), []byte("1\n00:00:00,000 --> 00:00:01,000\nHi\n"), 0o644)
+	js, _ := json.Marshal(map[string]string{"path": media})
+	call(t, h, "POST", "/api/v1/folders", string(js))
+	a.Scanner.Wait()
+	_, e := call(t, h, "GET", "/api/v1/videos", "")
+	var vids []struct{ ID int64 }
+	json.Unmarshal(e.Data, &vids)
+	id := itoa64(vids[0].ID)
+
+	send := func(method, path, body, token string) int {
+		req := strings.NewReader(body)
+		w := doWith(h, method, path, "192.168.1.30:4000", req, map[string]string{"X-Device-Token": token})
+		return w.Code
+	}
+	tok := "phone-ABCDEFGHIJKL"
+	// A malformed token still saves progress (shared), but no device is recorded for it.
+	if c := send("PUT", "/api/v1/videos/"+id+"/progress", `{"position":1,"duration":2}`, "short"); c != 200 {
+		t.Fatalf("progress without a valid token: %d", c)
+	}
+	if c := send("PUT", "/api/v1/videos/"+id+"/progress", `{"position":-1,"duration":2}`, tok); c != 400 {
+		t.Fatalf("negative position: %d", c)
+	}
+	if c := send("PUT", "/api/v1/videos/999/progress", `{"position":1,"duration":2}`, tok); c != 404 {
+		t.Fatalf("unknown video: %d", c)
+	}
+	if c := send("PUT", "/api/v1/videos/"+id+"/progress", `{"position":0.8,"duration":2}`, tok); c != 200 {
+		t.Fatalf("progress: %d", c)
+	}
+	// sendBeacon: POST with the token in the body.
+	w := do(h, "POST", "/api/v1/videos/"+id+"/progress", "192.168.1.30:1", strings.NewReader(`{"position":0.9,"duration":2,"device_token":"`+tok+`"}`))
+	if w.Code != 200 {
+		t.Fatalf("beacon: %d %s", w.Code, w.Body)
+	}
+	_, e = call(t, h, "GET", "/api/v1/continue-watching", "")
+	if e.Pagination.Total != 1 || !strings.Contains(string(e.Data), `"position":0.9`) {
+		t.Fatalf("continue watching: %s", e.Data)
+	}
+	_, e = call(t, h, "GET", "/api/v1/dashboard", "")
+	for _, k := range []string{`"stats"`, `"recently_added"`, `"continue_watching"`, `"last_scan"`} {
+		if !strings.Contains(string(e.Data), k) {
+			t.Fatalf("dashboard lacks %s: %s", k, e.Data)
+		}
+	}
+	if c := send("POST", "/api/v1/videos/"+id+"/completed", "", tok); c != 200 {
+		t.Fatalf("completed: %d", c)
+	}
+	if _, e = call(t, h, "GET", "/api/v1/continue-watching", ""); e.Pagination.Total != 0 {
+		t.Fatal("a finished video must leave continue watching")
+	}
+	if _, e = call(t, h, "GET", "/api/v1/history", ""); e.Pagination.Total != 1 {
+		t.Fatal("history")
+	}
+
+	// Devices: the phone appears and can be named.
+	if c := send("PUT", "/api/v1/devices/current", `{"name":"Kitchen phone"}`, tok); c != 200 {
+		t.Fatalf("name device: %d", c)
+	}
+	w = doWith(h, "GET", "/api/v1/devices", "192.168.1.30:1", nil, map[string]string{"X-Device-Token": tok})
+	if !strings.Contains(w.Body.String(), `"name":"Kitchen phone"`) || !strings.Contains(w.Body.String(), `"current":true`) {
+		t.Fatalf("devices: %s", w.Body)
+	}
+
+	// Subtitles come out as WebVTT.
+	_, e = call(t, h, "GET", "/api/v1/videos/"+id, "")
+	var det struct{ Subtitles []struct{ ID int64 } }
+	json.Unmarshal(e.Data, &det)
+	if len(det.Subtitles) != 1 {
+		t.Fatalf("subtitles: %s", e.Data)
+	}
+	w = do(h, "GET", "/api/v1/videos/"+id+"/subtitles/"+itoa64(det.Subtitles[0].ID), "192.168.1.30:1", nil)
+	if w.Code != 200 || !strings.HasPrefix(w.Body.String(), "WEBVTT") || !strings.Contains(w.Body.String(), "00:00:00.000 --> 00:00:01.000") {
+		t.Fatalf("vtt: %d %q", w.Code, w.Body)
+	}
+	if w := do(h, "GET", "/api/v1/videos/"+id+"/subtitles/999", "192.168.1.30:1", nil); w.Code != 404 {
+		t.Fatal("unknown subtitle")
+	}
+
+	if c := send("DELETE", "/api/v1/history", "", tok); c != 200 {
+		t.Fatal("clear history")
+	}
+	if _, e = call(t, h, "GET", "/api/v1/history", ""); e.Pagination.Total != 0 {
+		t.Fatal("history not cleared")
+	}
+}

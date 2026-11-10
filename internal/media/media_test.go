@@ -113,3 +113,15 @@ func TestWalk(t *testing.T) {
 		t.Fatal(Title("the.big_movie  (2020).mkv"))
 	}
 }
+
+func TestSRTToVTT(t *testing.T) {
+	in := "\xef\xbb\xbf1\r\n00:00:01,5 --> 0:00:03,250\r\nHello <i>there</i>\r\n\r\n2\r\n00:01:00,000 --> 00:01:02,000\r\nCaf\xe9\r\n"
+	got := string(SRTToVTT([]byte(in)))
+	want := "WEBVTT\n\n1\n00:00:01.500 --> 00:00:03.250\nHello <i>there</i>\n\n2\n00:01:00.000 --> 00:01:02.000\nCafé\n"
+	if got != want {
+		t.Fatalf("got %q", got)
+	}
+	if v := string(NormalizeVTT([]byte("00:01.000 --> 00:02.000\nx"))); v[:6] != "WEBVTT" {
+		t.Fatal(v)
+	}
+}

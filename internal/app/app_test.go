@@ -33,6 +33,17 @@ func do(h http.Handler, method, path, remote string, body io.Reader) *httptest.R
 	return w
 }
 
+func doWith(h http.Handler, method, path, remote string, body io.Reader, headers map[string]string) *httptest.ResponseRecorder {
+	r := httptest.NewRequest(method, path, body)
+	r.RemoteAddr = remote
+	for k, v := range headers {
+		r.Header.Set(k, v)
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	return w
+}
+
 func TestSystemEndpointsAndFrontend(t *testing.T) {
 	_, h := newTestApp(t)
 	const lan = "192.168.1.20:5555"
