@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"enstream/internal/config"
+	repo "enstream/internal/database/repositories"
+	"enstream/internal/jobs"
 	"enstream/internal/media"
 	"enstream/internal/network"
 )
@@ -24,4 +26,6 @@ type App struct {
 	FFprobe   *media.Tool
 	Addresses []network.Address
 	StartedAt time.Time
+	Store     *repo.Store
+	Scanner   *jobs.Scanner
 }

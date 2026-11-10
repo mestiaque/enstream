@@ -11,6 +11,8 @@ import (
 
 	"enstream/internal/config"
 	"enstream/internal/database"
+	repo "enstream/internal/database/repositories"
+	"enstream/internal/jobs"
 	"enstream/internal/media"
 	"enstream/internal/network"
 )
@@ -61,6 +63,11 @@ func Bootstrap(ctx context.Context, o Options) (*App, error) {
 			log.Warn("dependency missing", "tool", t.Name, "error", t.Error)
 		}
 	}
+	a.Store = repo.New(db)
+	if err := a.Store.MarkInterruptedScans(ctx); err != nil {
+		log.Warn("could not close interrupted scans", "error", err)
+	}
+	a.Scanner = jobs.NewScanner(a.Store, cfg, paths, a.FFmpeg, a.FFprobe, log)
 	a.RefreshAddresses()
 	log.Info("ENStream starting", "version", Version, "data", paths.Data)
 	return a, nil

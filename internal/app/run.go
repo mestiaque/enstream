@@ -25,7 +25,7 @@ func Run(ctx context.Context, o Options) error {
 		a.DB.Close()
 		return err
 	}
-	return a.Serve(ctx, h, nil)
+	return a.Serve(ctx, h, a.Scanner.Shutdown)
 }
 
 // Handler builds the full HTTP handler (also used by integration tests).
@@ -39,6 +39,9 @@ func (a *App) Handler() (http.Handler, error) {
 			return a.Addresses
 		},
 	}
+	folders := &handlers.Folders{Store: a.Store, Scanner: a.Scanner, Log: a.Log}
+	scans := &handlers.Scanner{Store: a.Store, Scanner: a.Scanner, Log: a.Log}
+	videos := &handlers.Videos{Store: a.Store, Paths: a.Paths, Log: a.Log}
 	front, err := server.Frontend(web.Files, Version)
 	if err != nil {
 		return nil, err
@@ -52,6 +55,23 @@ func (a *App) Handler() (http.Handler, error) {
 		API: func(r chi.Router) {
 			r.Get("/health", sys.Health)
 			r.Get("/system/info", sys.Info)
+
+			r.Get("/folders", folders.List)
+			r.Post("/folders", folders.Add)
+			r.Get("/folders/{id}", folders.Get)
+			r.Delete("/folders/{id}", folders.Delete)
+
+			r.Post("/scanner/scan", scans.Scan)
+			r.Get("/scanner/status", scans.Status)
+			r.Get("/scanner/jobs", scans.Jobs)
+			r.Get("/scanner/jobs/{id}", scans.Job)
+			r.Post("/scanner/cancel", scans.Cancel)
+			r.Post("/scanner/retry-failed", scans.RetryFailed)
+
+			r.Get("/videos", videos.List)
+			r.Get("/videos/extensions", videos.Extensions)
+			r.Get("/videos/{id}", videos.Get)
+			r.Get("/videos/{id}/thumbnail", videos.Thumbnail)
 		},
 		Frontend: front,
 	}), nil
