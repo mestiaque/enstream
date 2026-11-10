@@ -1,7 +1,8 @@
-import { h, icon, clear, isTyping } from "./dom.js";
+import { h, icon, clear, swap, isTyping, fmtNumber } from "./dom.js";
 import { get, request } from "./api.js";
-import { toast } from "./ui.js";
-import { initDesktop } from "./desktop.js";
+import { toast, openMenu, copyText } from "./ui.js";
+import { initDesktop, desktop, openExternal } from "./desktop.js";
+import { prefs, setPref, applyAppearance } from "./store.js";
 
 // ------------------------------------------------------------------ routes
 // Each view module exports render(ctx) -> { el, destroy?, title? } (may be async).
@@ -19,26 +20,26 @@ const routes = [
   [/^\/welcome$/, () => import("./views/welcome.js"), "welcome"],
 ];
 
-const NAV = [
+const LIBRARY = [
   { href: "/", label: "Home", icon: "house", key: "home" },
-  { href: "/library", label: "All videos", short: "Library", icon: "film", key: "library", count: true },
-  { href: "/continue", label: "Continue watching", short: "Continue", icon: "circle-play", key: "continue" },
-  { href: "/recent", label: "Recently added", icon: "clock", key: "recent" },
+  { href: "/library", label: "All Videos", short: "Library", icon: "layout-grid", key: "library", count: "videos" },
+  { href: "/continue", label: "Continue Watching", short: "Continue", icon: "circle-play", key: "continue", count: "continue" },
+  { href: "/recent", label: "Recently Added", icon: "clock", key: "recent" },
   { href: "/history", label: "History", icon: "history", key: "history" },
-  { section: "Manage" },
-  { href: "/folders", label: "Folders & scan", short: "Folders", icon: "folder", key: "folders" },
-  { href: "/settings", label: "Settings", icon: "settings", key: "settings" },
 ];
-const BOTTOM = ["home", "library", "continue", "folders", "settings"];
+const BOTTOM = [["home", "/", "house", "Home"], ["library", "/library", "layout-grid", "Library"], ["continue", "/continue", "circle-play", "Continue"], ["folders", "/folders", "folder", "Folders"], ["settings", "/settings", "settings", "Settings"]];
 
 const view = document.getElementById("view");
 const sidebar = document.getElementById("sidebar");
 const scrim = document.getElementById("scrim");
 const searchInput = document.getElementById("search");
+const tbTitle = document.getElementById("tb-title");
 let current = null;
 let renderSeq = 0;
 let authRequired = false;
 let pinEnabled = false;
+const counts = {};
+const folderBox = h("div");
 
 // A PIN is set and this browser has no session: show the sign-in screen.
 window.addEventListener("enstream:auth-required", () => {
@@ -49,36 +50,108 @@ window.addEventListener("enstream:auth-required", () => {
 export function signedIn(next) {
   authRequired = false;
   pinEnabled = true;
-  updateSignOut();
   navigate(next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/login") ? next : "/", { replace: true });
   pollScan();
   refreshCount();
 }
 export function setPinEnabled(on) {
   pinEnabled = on;
-  updateSignOut();
 }
+export const isPinEnabled = () => pinEnabled;
+
+const navLink = (href, label, ic, key, countId) => h("a", { class: "nav-link", href, "data-link": "", title: label, dataset: { key } }, icon(ic), h("span", { text: label }),
+  countId ? h("span", { class: "count", id: `count-${countId}` }) : null);
 
 function buildNav() {
   const nav = document.getElementById("nav");
-  for (const item of NAV) {
-    if (item.section) {
-      nav.append(h("div", { class: "nav-label", text: item.section }));
-      continue;
-    }
-    nav.append(h("a", { class: "nav-link", href: item.href, "data-link": "", dataset: { key: item.key } }, icon(item.icon), h("span", { text: item.label }),
-      item.count ? h("span", { class: "count", id: "nav-count" }) : null));
-  }
+  nav.append(
+    h("div", { class: "nav-section" }, h("div", { class: "nav-label" }, h("span", { text: "Library" })), LIBRARY.map((i) => navLink(i.href, i.label, i.icon, i.key, i.count))),
+    h("div", { class: "nav-section" }, h("div", { class: "nav-label" }, h("span", { text: "Folders" }),
+      h("a", { class: "icon-btn", href: "/folders", "data-link": "", title: "Add a folder", "aria-label": "Add a folder" }, icon("plus"))),
+      navLink("/folders", "All folders", "folder-open", "folders"), folderBox));
   const bottom = document.getElementById("bottom-nav");
-  for (const key of BOTTOM) {
-    const item = NAV.find((n) => n.key === key);
-    bottom.append(h("a", { href: item.href, "data-link": "", dataset: { key } }, icon(item.icon), h("span", { text: item.short || item.label })));
-  }
-  const menu = document.getElementById("menu-btn");
-  menu.append(icon("menu"));
-  menu.addEventListener("click", () => setMenu(true));
+  for (const [key, href, ic, label] of BOTTOM) bottom.append(h("a", { href, "data-link": "", dataset: { key } }, icon(ic), h("span", { text: label })));
   scrim.addEventListener("click", () => setMenu(false));
   document.getElementById("search-icon").append(icon("search", "sm"));
+  buildTopbar();
+}
+
+async function refreshFolders() {
+  try {
+    const list = await get("/folders");
+    swap(folderBox, list.length ? list.map((f) => navLink(`/library?folder_id=${f.id}`, f.name, f.available ? "folder" : "circle-alert", `folder:${f.id}`))
+      : h("div", { class: "nav-empty", text: "No folders yet" }));
+    for (const f of list) {
+      const a = folderBox.querySelector(`[data-key="folder:${f.id}"]`);
+      if (a && f.video_count) a.append(h("span", { class: "count", text: fmtNumber(f.video_count) }));
+    }
+    counts.folders = list.length;
+    updateStatusLeft();
+    setActive(activeKey);
+  } catch { /* offline */ }
+}
+
+// ------------------------------------------------------------------ top bar
+function buildTopbar() {
+  const left = document.getElementById("tb-left");
+  const menuBtn = h("button", { class: "icon-btn only-mobile", type: "button", "aria-label": "Menu", onclick: () => setMenu(true) }, icon("menu"));
+  const toggle = h("button", { class: "icon-btn hide-sm", type: "button", "aria-label": "Toggle sidebar", title: "Toggle sidebar (Ctrl+B)", onclick: toggleSidebar }, icon("panel-left"));
+  const back = h("button", { class: "icon-btn tb-nav", type: "button", "aria-label": "Back", title: "Back", onclick: () => history.back() }, icon("chevron-left"));
+  const fwd = h("button", { class: "icon-btn tb-nav", type: "button", "aria-label": "Forward", title: "Forward", onclick: () => history.forward() }, icon("chevron-right"));
+  left.append(menuBtn, toggle, back, fwd);
+
+  const right = document.getElementById("tb-right");
+  const scanBtn = h("button", { class: "icon-btn", type: "button", "aria-label": "Scan library", title: "Scan library", onclick: scanNow }, icon("refresh-cw"));
+  const addBtn = h("a", { class: "icon-btn hide-sm", href: "/folders", "data-link": "", "aria-label": "Add folder", title: "Add folder" }, icon("folder-plus"));
+  const themeBtn = h("button", { class: "icon-btn", type: "button", "aria-label": "Theme", title: "Theme" }, icon(themeIcon()));
+  themeBtn.addEventListener("click", () => openMenu(themeBtn, THEMES.map(([id, label, ic]) => ({ label, icon: ic, checked: prefs().theme === id || (!prefs().theme && id === "dark"),
+    onSelect: () => { setPref("theme", id); applyAppearance(); swap(themeBtn, icon(themeIcon())); } }))));
+  const moreBtn = h("button", { class: "icon-btn", type: "button", "aria-label": "More", title: "More" }, icon("more-horizontal"));
+  moreBtn.addEventListener("click", () => openMenu(moreBtn, moreEntries()));
+  const gear = h("button", { class: "icon-btn", type: "button", "aria-label": "Settings", title: "Settings (Ctrl+,)", onclick: () => openSettingsDialog() }, icon("settings"));
+  right.append(scanBtn, addBtn, h("span", { class: "tb-sep hide-sm" }), themeBtn, moreBtn, gear);
+}
+
+const THEMES = [["dark", "Dark", "moon"], ["light", "Light", "sun"], ["glass", "Glass", "sparkles"], ["system", "System", "monitor"]];
+const themeIcon = () => (THEMES.find(([id]) => id === (prefs().theme || "dark")) || THEMES[0])[2];
+
+function moreEntries() {
+  const list = [
+    { label: "Keyboard shortcuts", icon: "info", onSelect: () => openSettingsDialog("about") },
+    { label: "Copy address for phones", icon: "smartphone", onSelect: copyPhoneAddress },
+  ];
+  if (desktop.available) list.push({ label: "Open in browser", icon: "external-link", onSelect: () => openExternal(location.origin) });
+  if (pinEnabled && !authRequired) list.push({ separator: true }, { label: "Sign out", icon: "log-out", onSelect: signOut });
+  if (desktop.available) list.push({ separator: true }, { label: "Hide to tray", onSelect: () => desktop.win().hide() }, { label: "Quit ENStream", danger: true, onSelect: () => desktop.invoke("quit_app") });
+  return list;
+}
+
+async function copyPhoneAddress() {
+  try {
+    const info = await get("/system/info");
+    const a = (info.addresses || []).find((x) => x.private);
+    if (a) copyText(a.url, "Address copied");
+    else toast("No network address", { type: "error", detail: "Connect this computer to Wi-Fi or Ethernet." });
+  } catch (err) { toast(err.message, { type: "error" }); }
+}
+
+async function scanNow() {
+  try {
+    await request("/scanner/scan", { method: "POST", body: {} });
+    toast("Scanning your folders");
+    pollScan();
+  } catch (err) { toast(err.message, { type: "error" }); }
+}
+
+function toggleSidebar() {
+  const on = !document.body.classList.contains("sidebar-collapsed");
+  document.body.classList.toggle("sidebar-collapsed", on);
+  setPref("sidebarCollapsed", on);
+}
+
+async function openSettingsDialog(tab) {
+  const mod = await import("./views/settings.js");
+  mod.openSettings(tab);
 }
 
 function setMenu(open) {
@@ -86,7 +159,9 @@ function setMenu(open) {
   scrim.hidden = !open;
 }
 
+let activeKey = "";
 function setActive(key) {
+  activeKey = key;
   const k = key === "details" ? "library" : key;
   for (const a of document.querySelectorAll("[data-key]")) {
     const on = a.dataset.key === k;
@@ -131,8 +206,16 @@ async function render() {
     document.title = "Not found · ENStream";
     return;
   }
+  if (match[2] === "settings") {
+    const tab = new URLSearchParams(location.search).get("tab") || "";
+    history.replaceState({}, "", "/");
+    await render();
+    openSettingsDialog(tab);
+    return;
+  }
   const [re, load, key] = match;
-  setActive(key);
+  const folderId = key === "library" ? new URLSearchParams(location.search).get("folder_id") : null;
+  setActive(folderId ? `folder:${folderId}` : key);
   const params = path.match(re).slice(1);
   const ctx = { key, params, query: new URLSearchParams(location.search), navigate, setQuery };
   // The search box mirrors the library's search; elsewhere it starts empty.
@@ -148,7 +231,8 @@ async function render() {
     current = result;
     clear(view).append(result.el);
     document.title = result.title ? `${result.title} · ENStream` : "ENStream";
-    if (!history.state?.scroll) window.scrollTo(0, 0);
+    tbTitle.textContent = result.title || "";
+    view.scrollTop = 0;
     if (key !== "watch") view.focus({ preventScroll: true });
   } catch (err) {
     console.error(err);
@@ -194,18 +278,33 @@ document.addEventListener("keydown", (e) => {
     searchInput.select();
   } else if (e.key === "Escape" && sidebar.classList.contains("open")) {
     setMenu(false);
+  } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b" && !isTyping(e)) {
+    e.preventDefault();
+    toggleSidebar();
+  } else if ((e.ctrlKey || e.metaKey) && e.key === ",") {
+    e.preventDefault();
+    openSettingsDialog();
   }
 });
 export const setSearchText = (q) => { searchInput.value = q || ""; };
 
-// ------------------------------------------------------------------ scan status
+// ------------------------------------------------------------------ status bar + scan status
 // One poller for the whole app; views listen for "enstream:scan".
-const pill = document.getElementById("scan-pill");
-const pillIcon = icon("loader-circle", "sm spin");
-const pillLabel = h("span", { class: "label" });
-pill.append(pillIcon, pillLabel);
+const statusLeft = document.getElementById("status-left");
+const statusRight = document.getElementById("status-right");
+const online = h("span", { class: "dot", title: "Server online" });
+const scanText = h("span");
+const scanIcon = h("span", { class: "status-item" });
+statusRight.classList.add("status-item");
+statusRight.append(scanIcon, scanText, online);
 let lastStatus = null;
 let pollTimer;
+
+function updateStatusLeft() {
+  const v = counts.videos ?? 0;
+  const f = counts.folders ?? 0;
+  statusLeft.textContent = `${fmtNumber(v)} ${v === 1 ? "video" : "videos"} · ${f} ${f === 1 ? "folder" : "folders"}`;
+}
 
 export function scanStatus() { return lastStatus; }
 
@@ -218,12 +317,13 @@ export async function pollScan() {
     window.dispatchEvent(new CustomEvent("enstream:scan", { detail: s }));
     if (s.running) {
       const j = s.job;
-      pill.hidden = false;
-      pillLabel.textContent = j.total_files ? `Scanning ${j.processed_files + j.skipped_files} / ${j.total_files}` : "Scanning…";
+      swap(scanIcon, icon("loader-circle", "spin"));
+      scanText.textContent = j.total_files ? `Scanning ${fmtNumber(j.processed_files + j.skipped_files)} of ${fmtNumber(j.total_files)}…` : "Scanning…";
     } else {
-      pill.hidden = true;
-      if (wasRunning && s.job) {
-        const j = s.job;
+      swap(scanIcon);
+      const j = s.job;
+      scanText.textContent = j?.status === "failed" ? "Last scan failed" : j ? `Library up to date${j.new_files ? ` · ${fmtNumber(j.new_files)} new` : ""}` : "Not scanned yet";
+      if (wasRunning && j) {
         if (j.status === "completed") toast("Library scan finished", { type: "success", detail: `${j.new_files} new · ${j.updated_files} updated · ${j.removed_files} removed${j.failed_files ? ` · ${j.failed_files} failed` : ""}` });
         else if (j.status === "failed") toast("Scan failed", { type: "error", detail: j.error_message });
         else if (j.status === "cancelled") toast("Scan cancelled");
@@ -240,50 +340,40 @@ export async function pollScan() {
 }
 document.addEventListener("visibilitychange", () => { if (!document.hidden) pollScan(); });
 
-// ------------------------------------------------------------------ footer + counts
-const foot = document.getElementById("sidebar-foot");
-const dot = h("span", { class: "dot" });
-const footStatus = h("span", { text: "Connected" });
-const footVersion = h("span");
-const signOutBtn = h("button", { class: "btn ghost sm", type: "button", hidden: true, onclick: signOut }, icon("log-out", "sm"), "Sign out");
-foot.append(h("div", null, dot, footStatus), footVersion, signOutBtn);
-function updateSignOut() {
-  signOutBtn.hidden = !pinEnabled || authRequired;
-}
 async function signOut() {
   try { await request("/auth/logout", { method: "POST" }); } catch { /* ignore */ }
   authRequired = true;
-  updateSignOut();
   navigate("/login", { replace: true });
 }
 
 function setOnline(on) {
-  dot.classList.toggle("off", !on);
-  footStatus.textContent = on ? "Server online" : "Server offline";
+  online.classList.toggle("off", !on);
+  online.title = on ? "Server online" : "Server offline";
 }
 
 export async function refreshCount() {
   try {
-    const env = await request("/videos?limit=1");
-    const el = document.getElementById("nav-count");
-    if (el) el.textContent = env.pagination?.total ? new Intl.NumberFormat().format(env.pagination.total) : "";
+    const [all, cont] = await Promise.all([request("/videos?limit=1"), request("/continue-watching?limit=1")]);
+    counts.videos = all.pagination?.total || 0;
+    const set = (id, n) => { const el = document.getElementById(`count-${id}`); if (el) el.textContent = n ? fmtNumber(n) : ""; };
+    set("videos", counts.videos);
+    set("continue", cont.pagination?.total || 0);
+    updateStatusLeft();
   } catch { /* ignore */ }
+  refreshFolders();
 }
+window.addEventListener("enstream:library-changed", () => refreshCount());
 
 export async function boot() {
-  await initDesktop().catch((e) => console.error(e));
+  if (prefs().sidebarCollapsed) document.body.classList.add("sidebar-collapsed");
   buildNav();
+  await initDesktop().catch((e) => console.error(e));
   try {
     const st = await get("/auth/status");
     pinEnabled = st.pin_enabled;
     authRequired = !st.authenticated;
   } catch { /* offline: the page shows the error */ }
-  updateSignOut();
   render();
   pollScan();
   refreshCount();
-  try {
-    const info = await get("/system/info");
-    footVersion.textContent = `Version ${info.version}`;
-  } catch { /* ignore */ }
 }

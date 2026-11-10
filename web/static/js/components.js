@@ -29,11 +29,14 @@ function badges(v) {
   return h("div", { class: "card-badges" }, res ? h("span", { class: `tag ${res === "4K" ? "hi" : ""}`, text: res }) : null);
 }
 
-// meta: "folder" | "added" | "played" | "size"
+// Second line under the title, as in ENPlayer: "MP4 · 1280×720 · 48.2 MB".
 function metaLine(v, meta) {
-  if (meta === "played" && v.last_played_at) return `${v.completed ? "Watched" : `${fmtDuration(v.position)} of ${fmtDuration(v.duration)}`} · ${fmtAgo(v.last_played_at)}`;
-  if (meta === "added") return `Added ${fmtAgo(v.created_at)} · ${fmtSize(v.file_size)}`;
-  return `${v.folder_name} · ${fmtSize(v.file_size)}`;
+  if (meta === "played" && v.last_played_at) return [v.completed ? "Watched" : `${fmtDuration(v.position)} of ${fmtDuration(v.duration)}`, fmtAgo(v.last_played_at)].join("  ·  ");
+  const parts = [v.extension.replace(".", "").toUpperCase()];
+  if (v.width) parts.push(`${v.width}×${v.height}`);
+  parts.push(fmtSize(v.file_size));
+  if (meta === "added") parts.push(fmtAgo(v.created_at));
+  return parts.join("  ·  ");
 }
 
 // Opening a card remembers the surrounding list as the player's queue.

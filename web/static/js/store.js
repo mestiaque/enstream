@@ -36,3 +36,21 @@ export function queueAround(id) {
     return { prev: null, next: null, label: "" };
   }
 }
+
+// Theme (dark / light / glass / system) and accent colour, as in the sister apps.
+export const ACCENTS = ["#3b82f6", "#6366f1", "#8b5cf6", "#ec4899", "#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6", "#06b6d4"];
+const mq = window.matchMedia ? matchMedia("(prefers-color-scheme: light)") : null;
+export function applyAppearance() {
+  const p = prefs();
+  const theme = p.theme || "dark";
+  const dark = theme === "system" ? !(mq && mq.matches) : theme !== "light";
+  const c = document.documentElement.classList;
+  c.remove("dark", "light", "glass");
+  c.add(dark ? "dark" : "light");
+  if (theme === "glass") c.add("glass");
+  const hex = /^#[0-9a-f]{6}$/i.test(p.accent || "") ? p.accent : ACCENTS[0];
+  const n = parseInt(hex.slice(1), 16);
+  document.documentElement.style.setProperty("--accent", `${n >> 16} ${(n >> 8) & 255} ${n & 255}`);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", dark ? "#131315" : "#f4f4f6");
+}
+mq?.addEventListener?.("change", () => { if (prefs().theme === "system") applyAppearance(); });

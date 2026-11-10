@@ -166,7 +166,7 @@ export async function render() {
   pollScan();
 
   const el = h("div", null,
-    pageHead("Folders & scan", "ENStream reads videos from these folders. Files are never moved, renamed or deleted."),
+    pageHead("Folders", "ENStream reads videos from these folders. Files are never moved, renamed or deleted."),
     h("section", { class: "panel" }, h("div", { class: "panel-head" }, h("h2", { text: "Add a folder" })), h("div", { class: "panel-body" }, form,
       h("p", { class: "hint section", text: "Browse, or type the full path. USB drives and network shares work while they are connected." }))),
     h("section", { class: "section" }, scanBox),

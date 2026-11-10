@@ -1,6 +1,7 @@
 // Bridge to the ENStream desktop app (Tauri). In a normal browser `desktop.available` is
 // false and nothing here runs; the web UI works the same without it.
 import { h, icon, swap } from "./dom.js";
+import { modal } from "./ui.js";
 
 const T = window.__TAURI__;
 export const desktop = {
@@ -22,25 +23,26 @@ export const openAppFolder = (which) => desktop.invoke("open_app_folder", { whic
 
 const WIN_BTN = [["minimize", "minus", "Minimize"], ["maximize", "square", "Maximize"], ["close", "x", "Close"]];
 
-// Frameless window: our own title bar, like ENViewer, ENSave, ENPlayer and ENPost.
-function titleBar() {
-  const updatePill = h("button", { class: "update-pill", type: "button", hidden: true, id: "update-pill" }, icon("download", "sm"), "New version available");
-  const controls = h("div", { class: "win-controls" }, WIN_BTN.map(([act, ic, label]) =>
+// Minimise / maximise / close for the frameless window (same as the sister apps).
+export function windowControls() {
+  const box = h("div", { class: "win-controls" }, WIN_BTN.map(([act, ic, label]) =>
     h("button", { class: `win-btn ${act}`, type: "button", "aria-label": label, title: label, onclick: () => {
       const w = desktop.win();
       if (act === "minimize") w.minimize();
       else if (act === "maximize") w.toggleMaximize();
       else w.close();
     } }, icon(ic, "sm"))));
-  const bar = h("div", { class: "titlebar", id: "titlebar" },
-    h("img", { src: "/static/assets/enstream-icon.svg", alt: "", width: "20", height: "20", draggable: "false" }),
-    h("span", { class: "titlebar-name", text: "ENStream" }), h("div", { class: "titlebar-space" }), updatePill, controls);
-  bar.addEventListener("mousedown", (e) => {
-    if (e.button !== 0 || e.target.closest("button,a,input")) return;
+  box.addEventListener("dblclick", (e) => e.stopPropagation());
+  return box;
+}
+
+// A bar that moves the window: drag on empty space, double-click to maximise.
+export function makeDraggable(el) {
+  el.addEventListener("mousedown", (e) => {
+    if (e.button !== 0 || e.target.closest("button,input,select,textarea,a,[role=menu],[data-no-drag]")) return;
     if (e.detail === 2) desktop.win().toggleMaximize();
     else desktop.win().startDragging();
   });
-  return bar;
 }
 
 // ------------------------------------------------------------------ updates
@@ -64,14 +66,11 @@ export function showUpdateDialog() {
   const bar = h("i");
   const status = h("p", { class: "muted" });
   const progress = h("div", { class: "bar", hidden: true }, bar);
-  const install = h("button", { class: "btn grad", type: "button" }, icon("download", "sm"), "Update now");
+  const install = h("button", { class: "btn primary", type: "button" }, icon("download", "sm"), "Update now");
   const later = h("button", { class: "btn", type: "button", text: "Later" });
-  const dlg = h("dialog", { class: "modal", "aria-label": "Update ENStream" },
-    h("div", { class: "modal-body" }, h("h2", { text: `ENStream ${info.version} is available` }),
-      h("p", { class: "update-notes", text: info.notes || "Improvements and fixes." }), progress, status),
-    h("div", { class: "modal-foot" }, later, install));
+  const dlg = modal({ title: `ENStream ${info.version} is available`, body: h("div", { class: "modal-body" },
+    h("p", { class: "update-notes", text: info.notes || "Improvements and fixes." }), progress, status), footer: [later, install] });
   later.addEventListener("click", () => dlg.close());
-  dlg.addEventListener("close", () => dlg.remove());
   install.disabled = !info.installable;
   if (!info.installable) status.textContent = "This copy can't update itself. Download the new version from the release page.";
   install.addEventListener("click", async () => {
@@ -96,23 +95,26 @@ export function showUpdateDialog() {
       install.disabled = later.disabled = false;
     }
   });
-  document.body.append(dlg);
-  dlg.showModal();
 }
 
 // ------------------------------------------------------------------ setup
 export async function initDesktop() {
   if (!desktop.available) return;
   document.body.classList.add("desktop");
-  const bar = titleBar();
-  document.body.prepend(bar);
-  bar.querySelector("#update-pill").addEventListener("click", showUpdateDialog);
-  const maxBtn = bar.querySelector(".win-btn.maximize");
+  // The top bar is the title bar: it moves the window and holds the window buttons.
+  const bar = document.getElementById("topbar");
+  const right = document.getElementById("tb-right");
+  const pill = h("button", { class: "update-pill", type: "button", hidden: true, id: "update-pill", onclick: showUpdateDialog }, icon("download", "sm"), "New version available");
+  right.prepend(pill);
+  right.append(windowControls());
+  makeDraggable(bar);
+  makeDraggable(document.querySelector(".brand"));
   const syncMax = async () => {
     const m = await desktop.win().isMaximized().catch(() => false);
-    swap(maxBtn, icon(m ? "copy" : "square", "sm"));
-    maxBtn.title = m ? "Restore" : "Maximize";
-    document.body.classList.toggle("maximized", m);
+    for (const b of document.querySelectorAll(".win-btn.maximize")) {
+      swap(b, icon(m ? "copy" : "square", "sm"));
+      b.title = m ? "Restore" : "Maximize";
+    }
   };
   syncMax();
   desktop.win().onResized(syncMax);

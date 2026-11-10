@@ -23,8 +23,8 @@ export function confirmDialog({ title, message, confirm = "Confirm", danger = fa
   return new Promise((resolve) => {
     const ok = h("button", { class: `btn ${danger ? "solid-danger" : "primary"}`, type: "button", text: confirm });
     const cancel = h("button", { class: "btn", type: "button", text: "Cancel" });
-    const dlg = h("dialog", { class: "modal", "aria-label": title }, h("div", { class: "modal-body" }, h("h2", { text: title }), message ? h("p", { text: message }) : null),
-      h("div", { class: "modal-foot" }, cancel, ok));
+    const dlg = h("dialog", { class: "modal", "aria-label": title }, h("div", { class: "modal-head" }, h("h2", { text: title })),
+      message ? h("div", { class: "modal-body" }, h("p", { text: message })) : null, h("div", { class: "modal-foot" }, cancel, ok));
     let result = false;
     ok.addEventListener("click", () => { result = true; dlg.close(); });
     cancel.addEventListener("click", () => dlg.close());
@@ -78,7 +78,56 @@ export function link(href, props, ...children) {
   return h("a", { href, "data-link": "", ...props }, ...children);
 }
 
-export function pageHead(title, sub, actions = []) {
-  return h("div", { class: "page-head" }, h("div", null, h("h1", { text: title }), sub ? h("p", { text: sub }) : null),
+// Page title as in the sister apps: "All Videos  8 videos". `count` may be a node updated later.
+export function pageHead(title, sub, actions = [], count = null) {
+  return h("div", { class: "page-head" }, h("div", null, h("h1", null, title, count), sub ? h("p", { text: sub }) : null),
     actions.length ? h("div", { class: "actions" }, actions) : null);
+}
+
+// ------------------------------------------------------------------ dropdown menu
+// entries: { label, icon?, checked?, danger?, onSelect } | { separator: true } | { heading }
+let openMenuEl = null;
+export function closeMenu() {
+  openMenuEl?.remove();
+  openMenuEl = null;
+}
+export function openMenu(anchor, entries) {
+  if (openMenuEl && openMenuEl.dataset.owner === anchor.dataset.menuId) return closeMenu();
+  closeMenu();
+  anchor.dataset.menuId ||= String(Math.random());
+  const menu = h("div", { class: "menu", role: "menu", dataset: { owner: anchor.dataset.menuId } });
+  for (const e of entries) {
+    if (e.separator) { menu.append(h("hr")); continue; }
+    if (e.heading) { menu.append(h("div", { class: "menu-label", text: e.heading })); continue; }
+    menu.append(h("button", { type: "button", role: e.checked !== undefined ? "menuitemradio" : "menuitem", "aria-checked": e.checked !== undefined ? String(!!e.checked) : null, class: e.danger ? "danger" : "",
+      onclick: () => { closeMenu(); e.onSelect?.(); } }, h("span", { class: "check" }, e.checked ? icon("check", "sm") : e.icon ? icon(e.icon, "sm") : null), h("span", { text: e.label })));
+  }
+  document.body.append(menu);
+  const r = anchor.getBoundingClientRect();
+  const w = menu.offsetWidth;
+  menu.style.top = `${Math.round(r.bottom + 6)}px`;
+  menu.style.left = `${Math.round(Math.max(8, Math.min(window.innerWidth - w - 8, r.right - w)))}px`;
+  openMenuEl = menu;
+  menu.querySelector("button")?.focus({ preventScroll: true });
+  setTimeout(() => {
+    const off = (ev) => {
+      if (!menu.isConnected) return document.removeEventListener("pointerdown", off, true);
+      if (!menu.contains(ev.target) && !anchor.contains(ev.target)) { closeMenu(); document.removeEventListener("pointerdown", off, true); }
+    };
+    document.addEventListener("pointerdown", off, true);
+  });
+}
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && openMenuEl) closeMenu(); });
+
+// A dialog in the family style: title bar with a close button, body, optional footer.
+export function modal({ title, body, footer, cls = "" }) {
+  const close = h("button", { class: "icon-btn", type: "button", "aria-label": "Close", title: "Close" }, icon("x"));
+  const dlg = h("dialog", { class: `modal ${cls}`.trim(), "aria-label": title },
+    h("div", { class: "modal-head" }, h("h2", { text: title }), close), body, footer ? h("div", { class: "modal-foot" }, footer) : null);
+  close.addEventListener("click", () => dlg.close());
+  dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
+  dlg.addEventListener("close", () => dlg.remove());
+  document.body.append(dlg);
+  dlg.showModal();
+  return dlg;
 }

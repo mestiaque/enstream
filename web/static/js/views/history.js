@@ -68,6 +68,6 @@ export async function render(ctx) {
     swap(results, h("p", { class: "muted", text: `${fmtNumber(p.total)} ${p.total === 1 ? "video" : "videos"}` }), h("div", { class: "section" }, body), pagination(p, go));
   }
   load();
-  const el = h("div", null, pageHead(cont ? "Continue watching" : "History", cont ? "Pick up where you left off, on any device." : "Everything played on this server, newest first.", [clearBtn]), results);
-  return { el, title: cont ? "Continue watching" : "History" };
+  const el = h("div", null, pageHead(cont ? "Continue Watching" : "History", cont ? "Pick up where you left off, on any device." : "Everything played on this server, newest first.", [clearBtn]), results);
+  return { el, title: cont ? "Continue Watching" : "History" };
 }

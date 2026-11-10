@@ -34,7 +34,7 @@ export async function render(ctx) {
   const [folders, extensions] = await Promise.all([get("/folders").catch(() => []), get("/videos/extensions").catch(() => [])]);
 
   const results = h("div");
-  const count = h("span", { class: "result-count" });
+  const count = h("small");
   const chips = h("div", { class: "toolbar" });
   let abort;
 
@@ -73,7 +73,7 @@ export async function render(ctx) {
     else if (filters[k]) filters[k].value = "";
   };
   const toolbar = h("div", { class: "toolbar" }, Object.values(filters),
-    h("div", { class: "grow" }), count,
+    h("div", { class: "grow" }),
     select(SORTS, `${state.sort}:${state.order}`, "Sort", (v) => { const [sort, order] = v.split(":"); update({ sort, order }); }),
     viewToggle);
 
@@ -128,10 +128,12 @@ export async function render(ctx) {
   window.addEventListener("enstream:library-changed", onChange);
   load();
 
-  const el = h("div", null, pageHead(recent ? "Recently added" : "All videos", recent ? "The newest files found in your folders." : "Everything ENStream found in your folders."), toolbar, chips, results);
+  const folderName = folders.find((f) => String(f.id) === state.folder_id)?.name;
+  const title = recent ? "Recently Added" : folderName || "All Videos";
+  const el = h("div", null, pageHead(title, null, [], count), toolbar, chips, results);
   return {
     el,
-    title: recent ? "Recently added" : "All videos",
+    title,
     destroy() {
       abort?.abort();
       window.removeEventListener("enstream:search", onSearch);

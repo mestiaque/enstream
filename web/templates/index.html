@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#0f1013" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#131315" />
     <title>ENStream</title>
     <link rel="icon" href="/static/assets/enstream-icon.svg?v={{VERSION}}" type="image/svg+xml" />
+    <script src="/static/js/theme.js?v={{VERSION}}"></script>
     <link rel="stylesheet" href="/static/css/app.css?v={{VERSION}}" />
     <link rel="modulepreload" href="/static/js/app.js?v={{VERSION}}" />
   </head>
@@ -15,23 +15,27 @@
     <div class="shell" id="shell">
       <aside class="sidebar" id="sidebar" aria-label="Main">
         <a class="brand" href="/" data-link>
-          <img src="/static/assets/enstream-icon.svg?v={{VERSION}}" alt="" width="34" height="34" />
-          <span><strong>ENStream</strong><small>Your Personal Cinema</small></span>
+          <img src="/static/assets/enstream-icon.svg?v={{VERSION}}" alt="" width="24" height="24" draggable="false" />
+          <span>ENStream</span>
         </a>
         <nav class="nav" id="nav"></nav>
-        <div class="sidebar-foot" id="sidebar-foot"></div>
       </aside>
       <div class="column">
         <header class="topbar" id="topbar">
-          <button class="icon-btn only-mobile" id="menu-btn" type="button" aria-label="Open menu"></button>
+          <div class="tb-left" id="tb-left"></div>
+          <div class="tb-title" id="tb-title"></div>
           <form class="search" id="search-form" role="search">
             <span class="search-icon" id="search-icon"></span>
-            <input id="search" type="search" placeholder="Search your library" autocomplete="off" spellcheck="false" aria-label="Search videos" maxlength="200" />
-            <kbd class="only-desktop">/</kbd>
+            <input id="search" type="search" placeholder="Search videos…" autocomplete="off" spellcheck="false" aria-label="Search videos" maxlength="200" />
           </form>
-          <a class="scan-pill" id="scan-pill" href="/folders" data-link hidden></a>
+          <div class="tb-right" id="tb-right"></div>
         </header>
         <main class="view" id="view" tabindex="-1"></main>
+        <footer class="statusbar" id="statusbar">
+          <span id="status-left"></span>
+          <span class="grow"></span>
+          <span id="status-right"></span>
+        </footer>
       </div>
     </div>
     <nav class="bottom-nav" id="bottom-nav" aria-label="Main"></nav>

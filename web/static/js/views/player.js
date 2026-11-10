@@ -2,6 +2,7 @@ import { h, icon, setIcon, fmtDuration, isTyping, swap } from "../dom.js";
 import { get, send, beacon, streamURL, thumbURL, ApiError } from "../api.js";
 import { emptyState, link, copyText, toast } from "../ui.js";
 import { prefs, setPref, queueAround } from "../store.js";
+import { desktop, windowControls, makeDraggable } from "../desktop.js";
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 const SAVE_EVERY = 10_000; // ms between progress reports while playing
@@ -72,6 +73,10 @@ export async function render(ctx) {
 
   const top = h("div", { class: "p-top" }, btn("arrow-left", "Back (Esc)", () => leave()),
     h("div", { class: "p-title" }, h("strong", { text: v.title }), h("small", { text: q.label && (q.prev || q.next) ? `${v.folder_name} · ${q.label}` : v.folder_name })));
+  if (desktop.available) {
+    top.append(windowControls());
+    makeDraggable(top);
+  }
   const bottom = h("div", { class: "p-bottom", onclick: (e) => e.stopPropagation() }, timeline,
     h("div", { class: "p-row" }, prevBtn, playBtn, nextBtn, backBtn, fwdBtn, h("div", { class: "volume" }, muteBtn, volume), time, h("div", { class: "spacer" }), ccBtn, speedBtn, pipBtn, fsBtn));
   const root = h("div", { class: "player", tabindex: "-1" }, video, center, flash, spinner, top, bottom, menuBox, overlay);
