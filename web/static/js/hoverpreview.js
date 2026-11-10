@@ -2,8 +2,8 @@
 // one-second pieces from across the whole video. The server makes these clips in the
 // background (small 480p files, so they start at once and loop). A video without a clip yet
 // (just added) plays pieces of the original file instead, and the request moves it to the
-// front of the server's queue. On touch screens, pressing and holding a card starts the preview
-// (a quick tap still opens the video). One preview at a time; it can be turned off in
+// front of the server's queue. On touch screens, touching a card (even while scrolling) starts
+// the preview; a tap still opens the video. One preview at a time; it can be turned off in
 // Settings → Appearance.
 import { h } from "./dom.js";
 import { streamURL } from "./api.js";
@@ -12,8 +12,6 @@ import { prefs } from "./store.js";
 const POINTS = [0.1, 0.25, 0.4, 0.55, 0.7, 0.85];
 const PIECE_SECONDS = 2.5;
 const START_DELAY = 250; // ms of resting before anything loads
-const HOLD_DELAY = 350; // ms a finger rests on a card before its preview starts
-const MOVE_SLOP = 10; // px a finger may move while holding (more is a scroll)
 const CLIP_PIECES = 10; // pieces in a server clip, one second each
 const CLIP_MIN_DURATION = 20; // shorter videos get no clip
 const previewURL = (id) => `/api/v1/videos/${id}/preview`;
@@ -38,45 +36,21 @@ export function attachPreview(thumb, v) {
     clearTimeout(timer);
     if (active?.thumb === thumb) stop();
   });
-  holdToPreview(thumb, () => (hasClip ? startClip(thumb, v) : start(thumb, v)));
+  touchToPreview(thumb, () => (hasClip ? startClip(thumb, v, { fallback: false }) : start(thumb, v)));
 }
 
-// Touch: press and hold plays the preview, which keeps playing after the finger lifts until
-// the card scrolls away, another card is touched or the page changes. Moving the finger is a
-// scroll and cancels; a quick tap opens the video as before, also while its preview plays.
-function holdToPreview(thumb, go) {
-  let hold = null;
-  let held = false;
-  let x = 0;
-  let y = 0;
-  const cancel = () => { clearTimeout(hold); hold = null; };
+// Touch: any touch on a card plays its preview at once, also a finger that lands on it while
+// scrolling. It keeps playing until the card scrolls away or another card is touched. A tap
+// still opens the video. Touch uses the server clip only (a missing clip is queued, not
+// replaced by streaming the original file, which would make scrolling heavy).
+function touchToPreview(thumb, go) {
   thumb.addEventListener("pointerdown", (e) => {
-    if (e.pointerType !== "touch" || !enabled()) return;
-    held = false;
-    x = e.clientX; y = e.clientY;
-    cancel();
-    if (active?.thumb === thumb) return; // already playing: this touch is a tap to open
-    hold = setTimeout(() => {
-      hold = null;
-      held = true;
-      navigator.vibrate?.(8);
-      go();
-      untilGone(thumb);
-    }, HOLD_DELAY);
+    if (e.pointerType !== "touch" || !enabled() || active?.thumb === thumb) return;
+    go();
+    untilGone(thumb);
   });
-  thumb.addEventListener("pointermove", (e) => {
-    if (hold && Math.hypot(e.clientX - x, e.clientY - y) > MOVE_SLOP) cancel();
-  });
-  thumb.addEventListener("pointerup", cancel);
-  thumb.addEventListener("pointercancel", cancel); // the browser started scrolling
-  // The press that started a preview must not also open the video or show a menu.
-  thumb.addEventListener("click", (e) => {
-    if (!held) return;
-    held = false;
-    e.preventDefault();
-    e.stopPropagation();
-  }, true);
-  thumb.addEventListener("contextmenu", (e) => { if (held || hold) e.preventDefault(); });
+  // A long press shows the preview, not the link menu.
+  thumb.addEventListener("contextmenu", (e) => { if (active?.thumb === thumb) e.preventDefault(); });
 }
 
 // Ends a touch-started preview once its card is mostly scrolled away or another spot is touched.
@@ -99,7 +73,7 @@ function makeVideo() {
 }
 
 // The server clip: one small looping file; the bars follow its playback.
-function startClip(thumb, v) {
+function startClip(thumb, v, { fallback = true } = {}) {
   stop();
   const video = makeVideo();
   video.loop = true;
@@ -132,7 +106,7 @@ function startClip(thumb, v) {
   // No clip yet (404) or it cannot be read: play pieces of the original file instead.
   video.addEventListener("error", () => {
     if (state.stopped) return;
-    if (v.compatibility === "transcode") return stop();
+    if (!fallback || v.compatibility === "transcode") return stop();
     start(thumb, v);
   }, { once: true });
   state.cleanup = () => cancelAnimationFrame(state.frame);
