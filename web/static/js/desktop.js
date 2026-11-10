@@ -124,6 +124,11 @@ export async function initDesktop() {
     const a = e.target.closest("a[href]");
     if (!a) return;
     const url = new URL(a.href, location.href);
+    if (url.protocol === "mailto:") {
+      e.preventDefault();
+      openExternal(url.href).catch(() => {});
+      return;
+    }
     const external = url.origin !== location.origin || a.target === "_blank";
     if (external) {
       e.preventDefault();

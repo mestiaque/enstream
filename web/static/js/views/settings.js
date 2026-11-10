@@ -16,6 +16,16 @@ const SHORTCUTS = [
   ["Subtitles", "C"], ["Speed", "< >"], ["Next / previous video", "N P"], ["Jump to 0–90 %", "0–9"], ["Search", "/"], ["Toggle sidebar", "Ctrl B"],
 ];
 
+const BUILT_WITH = [
+  ["Go", "server and streaming", "BSD-3-Clause"],
+  ["SQLite (modernc.org/sqlite)", "library and history", "public domain · BSD-3-Clause"],
+  ["FFmpeg", "thumbnails and video details", "GPL / LGPL, separate program"],
+  ["chi", "HTTP routing", "MIT"],
+  ["go-qrcode", "QR codes for phones", "MIT"],
+  ["Tauri", "desktop app", "MIT / Apache-2.0"],
+  ["Lucide", "icons", "ISC"],
+];
+
 const deviceIcon = (ua) => (/Mobi|Android|iPhone|iPad/i.test(ua || "") ? "smartphone" : "monitor");
 function describeUA(ua) {
   if (!ua) return "Unknown browser";
@@ -350,22 +360,52 @@ export function openSettings(tab) {
   // ---------------------------------------------------------------- about
   async function about() {
     info ||= await get("/system/info");
-    const tool = (t) => (t?.available ? h("span", { class: "badge ok" }, icon("check", "sm"), t.version || "Available") : h("span", { class: "badge bad", title: t?.message || "", text: "Not found" }));
+    const app = desktop.available ? await desktop.invoke("app_info").catch(() => null) : null;
+    const PLATFORM = { linux: "Linux", windows: "Windows", darwin: "macOS", macos: "macOS" };
+    const [os, arch] = info.platform.split("/");
+    const box = (title, rows) => h("section", { class: "about-section" }, h("div", { class: "group", text: title }), h("div", { class: "about-box" }, rows));
+    const line = (label, hint, value) => h("div", { class: "about-row" }, h("span", null, label, hint ? h("small", { text: hint, title: hint }) : null), value);
+    const val = (text, mono) => h("span", { class: mono ? "mono muted" : "muted", text });
+    const tool = (t) => (t?.available ? val(t.version || "available", true) : h("span", { class: "badge bad", title: t?.message || "", text: "Not found" }));
+    const ext = (href, text) => h("a", { class: "about-link", href, target: "_blank", rel: "noopener" }, text, href.startsWith("http") ? icon("external-link", "sm") : null);
+
+    const copyDiagnostics = () => copyText([
+      `ENStream ${info.version}${app ? ` (desktop ${app.version})` : ""}`,
+      `${PLATFORM[os] || os} · ${arch}${app?.webview ? ` · WebView ${app.webview}` : ""}`,
+      `FFmpeg ${info.ffmpeg?.version || "missing"} · FFprobe ${info.ffprobe?.version || "missing"}`,
+      `Database schema v${info.schema_version} · ${info.go_version}`,
+    ].join("\n"), "Diagnostics copied");
+
+    const thisCopy = [
+      line("Version", null, val(info.version, true)),
+      line("System", null, val(`${PLATFORM[os] || os} · ${arch}`)),
+      app ? line("Tauri · WebView", null, val(`${app.tauri || "?"} · ${app.webview || "unknown"}`, true)) : null,
+      line("FFmpeg · FFprobe", "Thumbnails, durations and format checks", h("span", { class: "about-pair" }, tool(info.ffmpeg), tool(info.ffprobe))),
+      line("Database", null, val(`SQLite, schema v${info.schema_version}`)),
+      line("Running for", null, val(fmtDuration(info.uptime_seconds))),
+      app ? line("Library, history and settings", app.data_dir, h("button", { class: "btn sm", type: "button", onclick: () => openAppFolder("data") }, icon("folder-open", "sm"), "Open")) : null,
+      app ? line("Logs", null, h("button", { class: "btn sm", type: "button", onclick: () => openAppFolder("logs") }, icon("folder-open", "sm"), "Open")) : null,
+    ];
     const out = [
-      h("div", { class: "about" }, h("img", { src: "/static/assets/enstream-icon.svg", alt: "" }), h("div", null, h("h2", null, "ENStream ", h("span", { class: "muted", text: info.version })),
-        h("p", { class: "muted", text: "Your personal cinema: stream your videos to every screen at home." }),
-        h("p", { class: "hint", text: "No cloud, no account, no tracking. Your files stay on this computer." }))),
-      group("This copy"),
-      row("Version", null, h("span", { class: "mono", text: info.version })),
-      row("Running for", null, h("span", { text: fmtDuration(info.uptime_seconds) })),
-      row("System", null, h("span", { text: info.platform })),
-      row("FFmpeg", "Thumbnails, durations and format checks", tool(info.ffmpeg)),
-      row("FFprobe", null, tool(info.ffprobe)),
-      row("Database", null, h("span", { text: `SQLite, schema v${info.schema_version}` })),
+      h("div", { class: "about" }, h("img", { src: "/static/assets/enstream-icon.svg", alt: "", draggable: "false" }), h("div", null,
+        h("div", { class: "about-name" }, "ENStream ", h("span", { class: "muted", text: info.version })),
+        h("div", { class: "muted", text: "Your personal cinema, streamed to every screen at home." }),
+        h("div", { class: "hint", text: "Pick your video folders and watch them on phones, TVs and computers on your Wi-Fi. No cloud, no account." }))),
+      box("This copy", thisCopy),
+      h("div", { class: "about-actions" }, h("button", { class: "btn ghost sm", type: "button", onclick: copyDiagnostics }, icon("copy", "sm"), "Copy diagnostics")),
     ];
     if (!info.ffmpeg?.available || !info.ffprobe?.available) out.push(await ffmpegRow());
-    out.push(group("Keyboard shortcuts"), h("div", { class: "kbd-list" }, SHORTCUTS.map(([a, k]) => h("div", null, h("span", { text: a }), h("span", null, k.split(" ").map((x) => h("kbd", { text: x })))))),
-      group("Made with"), h("p", { class: "hint", text: "Go · SQLite · FFmpeg · Tauri · Lucide icons (ISC). Same family as ENViewer, ENSave, ENPlayer and ENPost. MIT License." }));
+    out.push(
+      box("Developer", [
+        line("Developed by", null, val("M. Estiaque Ahmed Khan")),
+        line("Contact", "Bug reports, ideas and feedback are welcome", ext("mailto:info@mestiaque.com", "info@mestiaque.com")),
+        line("Website", null, ext("https://mestiaque.com", "mestiaque.com")),
+        line("Also by the developer", "Same look and themes", val("ENViewer · ENSave · ENPlayer · ENPost")),
+        line("Licence", null, val("© 2026 M. Estiaque Ahmed Khan · MIT")),
+      ]),
+      box("Built with", BUILT_WITH.map(([name, what, licence]) => h("div", { class: "about-lib" }, h("span", null, name, h("span", { class: "faint", text: ` · ${what}` })), h("span", { class: "faint", text: licence })))),
+      box("Keyboard shortcuts", h("div", { class: "kbd-list" }, SHORTCUTS.map(([a, k]) => h("div", null, h("span", { text: a }), h("span", null, k.split(" ").map((x) => h("kbd", { text: x }))))))),
+    );
     return out;
   }
 

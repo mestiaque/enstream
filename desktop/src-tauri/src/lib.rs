@@ -46,8 +46,8 @@ async fn pick_folder(app: AppHandle) -> Result<Option<String>, String> {
 #[tauri::command]
 fn open_external(app: AppHandle, url: String) -> Result<(), String> {
     let u = Url::parse(&url).map_err(|e| e.to_string())?;
-    if !matches!(u.scheme(), "http" | "https") {
-        return Err("only web links can be opened".into());
+    if !matches!(u.scheme(), "http" | "https" | "mailto") {
+        return Err("only web and e-mail links can be opened".into());
     }
     app.opener()
         .open_url(u.as_str(), None::<&str>)
@@ -112,6 +112,8 @@ fn set_desktop_setting(
 #[derive(Serialize)]
 struct AppInfo {
     version: String,
+    tauri: &'static str,
+    webview: String,
     platform: &'static str,
     arch: &'static str,
     data_dir: String,
