@@ -693,3 +693,11 @@ body.watching { background: #000; }
 .preview-segs.clip { gap: 2px; }
 .preview-segs.clip i b { transition: none; }
 .card-thumb.previewing .duration { bottom: 14px; }
+
+/* iOS Safari zooms the page into any text field smaller than 16px when it gets focus.
+   Touch screens get 16px fields instead (pinch-zoom stays allowed). */
+@media (hover: none) and (pointer: coarse) {
+  .search input, .input, .select, textarea { font-size: 16px; }
+  .input.pin-input { font-size: 20px; }
+  .search input { height: 36px; }
+}
