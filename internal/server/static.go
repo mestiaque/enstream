@@ -2,6 +2,8 @@ package server
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"io/fs"
 	"net/http"
 	"path"
@@ -21,7 +23,13 @@ func Frontend(files fs.FS, version string) (http.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	index := bytes.ReplaceAll(raw, []byte("{{VERSION}}"), []byte(version))
+	// Asset URLs carry a hash of the files, not just the version: a rebuilt copy with the
+	// same version number must never be served from a browser's year-long cache.
+	tag, err := assetTag(static, version)
+	if err != nil {
+		return nil, err
+	}
+	index := bytes.ReplaceAll(raw, []byte("{{VERSION}}"), []byte(tag))
 	fileServer := http.StripPrefix("/static/", http.FileServer(http.FS(static)))
 	started := time.Now()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -51,4 +59,26 @@ func Frontend(files fs.FS, version string) (http.Handler, error) {
 		w.Header().Set("Cache-Control", "no-cache")
 		http.ServeContent(w, r, "index.html", started, bytes.NewReader(index))
 	}), nil
+}
+
+// assetTag is "<version>-<first 10 hex digits of a SHA-256 over every static file>".
+func assetTag(static fs.FS, version string) (string, error) {
+	h := sha256.New()
+	err := fs.WalkDir(static, ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, err := fs.ReadFile(static, p)
+		if err != nil {
+			return err
+		}
+		h.Write([]byte(p))
+		h.Write([]byte{0})
+		h.Write(b)
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+	return version + "-" + hex.EncodeToString(h.Sum(nil))[:10], nil
 }

@@ -78,7 +78,7 @@ func TestSystemEndpointsAndFrontend(t *testing.T) {
 
 	// The UI: index for client routes, versioned assets, no directory listing.
 	w = do(h, "GET", "/library", lan, nil)
-	if w.Code != 200 || !strings.Contains(w.Body.String(), "/static/css/app.css?v="+Version) {
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "/static/css/app.css?v="+Version+"-") {
 		t.Fatalf("index: %d", w.Code)
 	}
 	if w.Header().Get("Content-Security-Policy") == "" || w.Header().Get("X-Frame-Options") != "DENY" {
