@@ -2,6 +2,7 @@ import { h, icon, append, fmtDuration, fmtSize, fmtAgo, resolutionLabel } from "
 import { thumbURL } from "./api.js";
 import { setQueue, prefs } from "./store.js";
 import { link } from "./ui.js";
+import { attachPreview } from "./hoverpreview.js";
 
 export function thumbnail(v, cls = "card-thumb") {
   const box = h("div", { class: cls });
@@ -49,6 +50,7 @@ export function videoCard(v, { list = [v], label = "", meta = "folder" } = {}) {
   append(thumb, [badges(v), v.duration ? h("span", { class: "duration", text: fmtDuration(v.duration) }) : null,
     v.completed ? h("span", { class: "watched-mark", title: "Watched" }, icon("check")) : null, progressBar(v),
     h("div", { class: "card-overlay" }, link(`/watch/${v.id}`, { class: "play-fab", "aria-label": `Play ${v.title}`, onclick: remember(list, label) }, icon("play", "lg")))]);
+  attachPreview(thumb, v);
   return h("article", { class: `card ${!v.last_played_at ? "unwatched" : ""}` },
     link(`/video/${v.id}`, { "aria-hidden": "true", tabindex: "-1", onclick: remember(list, label) }, thumb),
     h("div", { class: "card-body" }, link(`/video/${v.id}`, { class: "card-title", title: v.title, onclick: remember(list, label) }, v.title),

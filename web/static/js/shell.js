@@ -196,6 +196,7 @@ export function setQuery(params) {
 
 async function render() {
   const seq = ++renderSeq;
+  window.dispatchEvent(new Event("enstream:navigate")); // e.g. ends a hover preview
   setMenu(false);
   const path = location.pathname.replace(/\/+$/, "") || "/";
   const match = routes.find(([re]) => re.test(path));
