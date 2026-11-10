@@ -44,7 +44,9 @@ const videoCols = `v.id, v.folder_id, f.name, v.title, v.file_name, v.relative_p
 	(SELECT COUNT(*) FROM subtitles s WHERE s.video_id = v.id), v.created_at, v.updated_at,
 	COALESCE(h.position, 0), COALESCE(h.completed, 0), h.last_played_at`
 
-const videoFrom = ` FROM videos v JOIN media_folders f ON f.id = v.folder_id LEFT JOIN playback_history h ON h.video_id = v.id`
+// videoFrom joins the history of one device: its first placeholder is that device's id
+// (0 = an unknown browser, which then has no history).
+const videoFrom = ` FROM videos v JOIN media_folders f ON f.id = v.folder_id LEFT JOIN playback_history h ON h.video_id = v.id AND h.device_id = ?`
 
 func scanVideo(row interface{ Scan(...any) error }) (Video, error) {
 	var v Video
@@ -60,6 +62,8 @@ func scanVideo(row interface{ Scan(...any) error }) (Video, error) {
 
 // VideoQuery: the library filters. Zero values mean "any".
 type VideoQuery struct {
+	// DeviceID selects whose history (positions, watched marks, filters) is shown.
+	DeviceID    int64
 	Page, Limit int
 	Search      string
 	FolderID    int64
@@ -130,6 +134,7 @@ func (q VideoQuery) where() (string, []any) {
 // Videos returns one page and the total count.
 func (s *Store) Videos(ctx context.Context, q VideoQuery) ([]Video, int, error) {
 	where, args := q.where()
+	args = append([]any{q.DeviceID}, args...)
 	var total int
 	if err := s.DB.QueryRowContext(ctx, `SELECT COUNT(*)`+videoFrom+where, args...).Scan(&total); err != nil {
 		return nil, 0, err
@@ -159,8 +164,9 @@ func (s *Store) Videos(ctx context.Context, q VideoQuery) ([]Video, int, error) 
 	return out, total, rows.Err()
 }
 
-func (s *Store) Video(ctx context.Context, id int64) (Video, error) {
-	v, err := scanVideo(s.DB.QueryRowContext(ctx, `SELECT `+videoCols+videoFrom+` WHERE v.id = ?`, id))
+// Video returns one video with the given device's position and watched mark.
+func (s *Store) Video(ctx context.Context, id, deviceID int64) (Video, error) {
+	v, err := scanVideo(s.DB.QueryRowContext(ctx, `SELECT `+videoCols+videoFrom+` WHERE v.id = ?`, deviceID, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return v, ErrNotFound
 	}

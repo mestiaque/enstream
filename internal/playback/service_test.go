@@ -26,7 +26,7 @@ func TestRules(t *testing.T) {
 	}
 }
 
-func TestSharedProgressAcrossDevices(t *testing.T) {
+func TestProgressIsPerDevice(t *testing.T) {
 	ctx := context.Background()
 	db, _ := database.Open(filepath.Join(t.TempDir(), "p.db"))
 	defer db.Close()
@@ -38,28 +38,48 @@ func TestSharedProgressAcrossDevices(t *testing.T) {
 	if _, err := svc.Update(ctx, vid, phone, "iPhone", 1234, 3600); err != nil {
 		t.Fatal(err)
 	}
-	cw, total, _ := st.History(ctx, true, 10, 0)
+	phoneID, laptopID := st.DeviceID(ctx, phone), st.DeviceID(ctx, laptop)
+	cw, total, _ := st.History(ctx, phoneID, true, 10, 0)
 	if total != 1 || cw[0].Position != 1234 {
 		t.Fatalf("continue watching %+v", cw)
 	}
-	st.RenameDevice(ctx, phone, "My iPhone")
-	cw, _, _ = st.History(ctx, true, 10, 0)
-	if cw[0].DeviceName != "My iPhone" {
-		t.Fatalf("device name %q", cw[0].DeviceName)
+	// Another device has its own history: nothing yet, and no position for the film.
+	if _, total, _ := st.History(ctx, laptopID, true, 10, 0); total != 0 {
+		t.Fatal("the laptop sees the phone's Continue Watching")
 	}
-	// The laptop sees the same position and continues.
-	if v, _ := st.Video(ctx, vid); v.Position != 1234 {
-		t.Fatal("shared position")
+	if _, err := svc.Update(ctx, vid, laptop, "Firefox", 10, 3600); err != nil {
+		t.Fatal(err)
+	}
+	laptopID = st.DeviceID(ctx, laptop)
+	if v, _ := st.Video(ctx, vid, phoneID); v.Position != 1234 {
+		t.Fatalf("phone position %v", v.Position)
+	}
+	if v, _ := st.Video(ctx, vid, laptopID); v.Position != 10 {
+		t.Fatalf("laptop position %v", v.Position)
 	}
 	done, err := svc.Update(ctx, vid, laptop, "Firefox", 3590, 3600)
 	if err != nil || !done {
 		t.Fatalf("completion %v %v", done, err)
 	}
-	if cw, _, _ := st.History(ctx, true, 10, 0); len(cw) != 0 {
+	if cw, _, _ := st.History(ctx, laptopID, true, 10, 0); len(cw) != 0 {
 		t.Fatal("finished videos leave Continue Watching")
 	}
-	if h, total, _ := st.History(ctx, false, 10, 0); total != 1 || !h[0].Completed {
+	if cw, _, _ := st.History(ctx, phoneID, true, 10, 0); len(cw) != 1 {
+		t.Fatal("finishing on the laptop changed the phone's Continue Watching")
+	}
+	if h, total, _ := st.History(ctx, laptopID, false, 10, 0); total != 1 || !h[0].Completed {
 		t.Fatal("history keeps finished videos")
+	}
+	// Clearing is per device too.
+	if err := st.ClearHistory(ctx, laptopID); err != nil {
+		t.Fatal(err)
+	}
+	if _, total, _ := st.History(ctx, phoneID, false, 10, 0); total != 1 {
+		t.Fatal("clearing the laptop's history cleared the phone's")
+	}
+	// Without a valid device token nothing is recorded.
+	if _, err := svc.Update(ctx, vid, "bad", "", 5, 3600); err != nil {
+		t.Fatal(err)
 	}
 	for _, bad := range [][2]float64{{-1, 100}, {500, 100}, {1, -5}} {
 		if _, err := svc.Update(ctx, vid, phone, "", bad[0], bad[1]); err != ErrInvalid {

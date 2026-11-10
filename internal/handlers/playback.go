@@ -19,6 +19,11 @@ type Playback struct {
 	Log     *slog.Logger
 }
 
+// device is the id of the browser making the request (0 if unknown): history is per device.
+func device(r *http.Request, store *repo.Store) int64 {
+	return store.DeviceID(r.Context(), deviceToken(r, ""))
+}
+
 // deviceToken comes from the X-Device-Token header (or the body for sendBeacon).
 func deviceToken(r *http.Request, body string) string {
 	if t := r.Header.Get("X-Device-Token"); t != "" {
@@ -79,7 +84,7 @@ func (h *Playback) list(w http.ResponseWriter, r *http.Request, inProgress bool)
 		server.Fail(w, http.StatusBadRequest, "INVALID_PARAMETER", "page must be 1 or more and limit between 1 and 100")
 		return
 	}
-	list, total, err := h.Store.History(r.Context(), inProgress, limit, (page-1)*limit)
+	list, total, err := h.Store.History(r.Context(), device(r, h.Store), inProgress, limit, (page-1)*limit)
 	if err != nil {
 		internal(w, r, h.Log, err)
 		return
@@ -95,7 +100,7 @@ func (h *Playback) DeleteHistory(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := h.Store.DeleteHistory(r.Context(), id); err != nil {
+	if err := h.Store.DeleteHistory(r.Context(), device(r, h.Store), id); err != nil {
 		internal(w, r, h.Log, err)
 		return
 	}
@@ -103,7 +108,7 @@ func (h *Playback) DeleteHistory(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Playback) ClearHistory(w http.ResponseWriter, r *http.Request) {
-	if err := h.Store.ClearHistory(r.Context()); err != nil {
+	if err := h.Store.ClearHistory(r.Context(), device(r, h.Store)); err != nil {
 		internal(w, r, h.Log, err)
 		return
 	}
@@ -169,17 +174,18 @@ func (h *Playback) Dashboard(w http.ResponseWriter, r *http.Request) {
 		internal(w, r, h.Log, err)
 		return
 	}
-	recent, _, err := h.Store.Videos(ctx, repo.VideoQuery{Page: 1, Limit: 12, Sort: "created_at", Desc: true})
+	dev := device(r, h.Store)
+	recent, _, err := h.Store.Videos(ctx, repo.VideoQuery{DeviceID: dev, Page: 1, Limit: 12, Sort: "created_at", Desc: true})
 	if err != nil {
 		internal(w, r, h.Log, err)
 		return
 	}
-	cont, _, err := h.Store.History(ctx, true, 12, 0)
+	cont, _, err := h.Store.History(ctx, dev, true, 12, 0)
 	if err != nil {
 		internal(w, r, h.Log, err)
 		return
 	}
-	played, _, err := h.Store.History(ctx, false, 8, 0)
+	played, _, err := h.Store.History(ctx, dev, false, 8, 0)
 	if err != nil {
 		internal(w, r, h.Log, err)
 		return

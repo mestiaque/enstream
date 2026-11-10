@@ -178,7 +178,14 @@ func TestPlaybackHistoryDevicesAndSubtitles(t *testing.T) {
 		return w.Code
 	}
 	tok := "phone-ABCDEFGHIJKL"
-	// A malformed token still saves progress (shared), but no device is recorded for it.
+	// History is per device: read it the way the phone does, with its token.
+	asPhone := func(path string) envelope {
+		w := doWith(h, "GET", path, "192.168.1.30:4000", nil, map[string]string{"X-Device-Token": tok})
+		var e envelope
+		_ = json.Unmarshal(w.Body.Bytes(), &e)
+		return e
+	}
+	// A malformed token is accepted but records nothing: history needs a device.
 	if c := send("PUT", "/api/v1/videos/"+id+"/progress", `{"position":1,"duration":2}`, "short"); c != 200 {
 		t.Fatalf("progress without a valid token: %d", c)
 	}
@@ -196,11 +203,18 @@ func TestPlaybackHistoryDevicesAndSubtitles(t *testing.T) {
 	if w.Code != 200 {
 		t.Fatalf("beacon: %d %s", w.Code, w.Body)
 	}
-	_, e = call(t, h, "GET", "/api/v1/continue-watching", "")
+	e = asPhone("/api/v1/continue-watching")
 	if e.Pagination.Total != 1 || !strings.Contains(string(e.Data), `"position":0.9`) {
 		t.Fatalf("continue watching: %s", e.Data)
 	}
-	_, e = call(t, h, "GET", "/api/v1/dashboard", "")
+	// Another device (here the host) does not see the phone's history.
+	if _, e = call(t, h, "GET", "/api/v1/continue-watching", ""); e.Pagination.Total != 0 {
+		t.Fatalf("the phone's history leaked to another device: %s", e.Data)
+	}
+	e = asPhone("/api/v1/dashboard")
+	if !strings.Contains(string(e.Data), `"position":0.9`) {
+		t.Fatalf("dashboard continue watching: %s", e.Data)
+	}
 	for _, k := range []string{`"stats"`, `"recently_added"`, `"continue_watching"`, `"last_scan"`} {
 		if !strings.Contains(string(e.Data), k) {
 			t.Fatalf("dashboard lacks %s: %s", k, e.Data)
@@ -209,10 +223,10 @@ func TestPlaybackHistoryDevicesAndSubtitles(t *testing.T) {
 	if c := send("POST", "/api/v1/videos/"+id+"/completed", "", tok); c != 200 {
 		t.Fatalf("completed: %d", c)
 	}
-	if _, e = call(t, h, "GET", "/api/v1/continue-watching", ""); e.Pagination.Total != 0 {
+	if e = asPhone("/api/v1/continue-watching"); e.Pagination.Total != 0 {
 		t.Fatal("a finished video must leave continue watching")
 	}
-	if _, e = call(t, h, "GET", "/api/v1/history", ""); e.Pagination.Total != 1 {
+	if e = asPhone("/api/v1/history"); e.Pagination.Total != 1 {
 		t.Fatal("history")
 	}
 
@@ -240,14 +254,11 @@ func TestPlaybackHistoryDevicesAndSubtitles(t *testing.T) {
 		t.Fatal("unknown subtitle")
 	}
 
-	// History is shared by every device: clearing all of it is host-only.
-	if c := send("DELETE", "/api/v1/history", "", tok); c != 403 {
-		t.Fatalf("phone cleared the shared history: %d", c)
+	// Each device clears its own history.
+	if c := send("DELETE", "/api/v1/history", "", tok); c != 200 {
+		t.Fatalf("phone could not clear its history: %d", c)
 	}
-	if c, _ := call(t, h, "DELETE", "/api/v1/history", ""); c != 200 {
-		t.Fatal("clear history on the host")
-	}
-	if _, e = call(t, h, "GET", "/api/v1/history", ""); e.Pagination.Total != 0 {
+	if e = asPhone("/api/v1/history"); e.Pagination.Total != 0 {
 		t.Fatal("history not cleared")
 	}
 }

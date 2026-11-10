@@ -53,14 +53,15 @@ func (s *Service) Update(ctx context.Context, videoID int64, token, userAgent st
 	if !ok {
 		return false, ErrNotFound
 	}
-	var deviceID *int64
-	if ValidToken(token) {
-		id, err := s.Store.TouchDevice(ctx, token, userAgent)
-		if err == nil {
-			deviceID = &id
-		}
-	}
 	completed = IsComplete(position, duration)
+	// History belongs to a device: without a valid device token there is nowhere to keep it.
+	if !ValidToken(token) {
+		return completed, nil
+	}
+	deviceID, err := s.Store.TouchDevice(ctx, token, userAgent)
+	if err != nil {
+		return completed, err
+	}
 	return completed, s.Store.SaveProgress(ctx, videoID, deviceID, position, duration, completed)
 }
 
@@ -73,11 +74,12 @@ func (s *Service) MarkCompleted(ctx context.Context, videoID int64, token, userA
 	if !ok {
 		return ErrNotFound
 	}
-	var deviceID *int64
-	if ValidToken(token) {
-		if id, err := s.Store.TouchDevice(ctx, token, userAgent); err == nil {
-			deviceID = &id
-		}
+	if !ValidToken(token) {
+		return nil
+	}
+	deviceID, err := s.Store.TouchDevice(ctx, token, userAgent)
+	if err != nil {
+		return err
 	}
 	return s.Store.SaveProgress(ctx, videoID, deviceID, 0, 0, true)
 }

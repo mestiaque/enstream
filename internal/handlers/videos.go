@@ -92,6 +92,7 @@ func (h *Videos) List(w http.ResponseWriter, r *http.Request) {
 		bad("order must be asc or desc")
 		return
 	}
+	q.DeviceID = device(r, h.Store)
 	vids, total, err := h.Store.Videos(r.Context(), q)
 	if err != nil {
 		internal(w, r, h.Log, err)
@@ -105,7 +106,7 @@ func (h *Videos) Get(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	v, err := h.Store.Video(r.Context(), id)
+	v, err := h.Store.Video(r.Context(), id, device(r, h.Store))
 	if errors.Is(err, repo.ErrNotFound) {
 		server.Fail(w, http.StatusNotFound, "VIDEO_NOT_FOUND", "The requested video was not found")
 		return

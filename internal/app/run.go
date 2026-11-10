@@ -111,7 +111,7 @@ func (a *App) Handler() (http.Handler, error) {
 			r.Get("/dashboard", play.Dashboard)
 			r.Get("/continue-watching", play.ContinueWatching)
 			r.Get("/history", play.History)
-			r.With(server.HostOnly).Delete("/history", play.ClearHistory)
+			r.Delete("/history", play.ClearHistory) // this device's history only
 			r.Delete("/history/{id}", play.DeleteHistory)
 			r.Get("/devices", play.Devices)
 			r.Put("/devices/current", play.NameDevice)

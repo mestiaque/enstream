@@ -57,29 +57,43 @@ func (s *Store) RenameDevice(ctx context.Context, token, name string) error {
 	return nil
 }
 
+// DeviceID returns the id of a known device token, or 0.
+func (s *Store) DeviceID(ctx context.Context, token string) int64 {
+	if token == "" {
+		return 0
+	}
+	var id int64
+	if err := s.DB.QueryRowContext(ctx, `SELECT id FROM devices WHERE device_token = ?`, token).Scan(&id); err != nil {
+		return 0
+	}
+	return id
+}
+
 func (s *Store) DeleteDevice(ctx context.Context, id int64) error {
 	_, err := s.DB.ExecContext(ctx, `DELETE FROM devices WHERE id = ?`, id)
 	return err
 }
 
-// SaveProgress stores the shared position of a video (one row per video).
-func (s *Store) SaveProgress(ctx context.Context, videoID int64, deviceID *int64, position, duration float64, completed bool) error {
+// SaveProgress stores a device's position in a video (one row per device and video).
+func (s *Store) SaveProgress(ctx context.Context, videoID, deviceID int64, position, duration float64, completed bool) error {
 	t := now()
 	_, err := s.DB.ExecContext(ctx, `INSERT INTO playback_history (video_id, device_id, position, duration, completed, last_played_at, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(video_id) DO UPDATE SET device_id = excluded.device_id, position = excluded.position, duration = excluded.duration,
+		ON CONFLICT(device_id, video_id) DO UPDATE SET position = excluded.position, duration = excluded.duration,
 		completed = excluded.completed, last_played_at = excluded.last_played_at, updated_at = excluded.updated_at`,
 		videoID, deviceID, position, duration, completed, t, t, t)
 	return err
 }
 
-func (s *Store) DeleteHistory(ctx context.Context, videoID int64) error {
-	_, err := s.DB.ExecContext(ctx, `DELETE FROM playback_history WHERE video_id = ?`, videoID)
+// DeleteHistory removes one video from a device's history.
+func (s *Store) DeleteHistory(ctx context.Context, deviceID, videoID int64) error {
+	_, err := s.DB.ExecContext(ctx, `DELETE FROM playback_history WHERE device_id = ? AND video_id = ?`, deviceID, videoID)
 	return err
 }
 
-func (s *Store) ClearHistory(ctx context.Context) error {
-	_, err := s.DB.ExecContext(ctx, `DELETE FROM playback_history`)
+// ClearHistory removes a device's whole history.
+func (s *Store) ClearHistory(ctx context.Context, deviceID int64) error {
+	_, err := s.DB.ExecContext(ctx, `DELETE FROM playback_history WHERE device_id = ?`, deviceID)
 	return err
 }
 
@@ -90,17 +104,17 @@ type HistoryEntry struct {
 }
 
 // History lists played videos, newest first. inProgress = only unfinished ones (Continue Watching).
-func (s *Store) History(ctx context.Context, inProgress bool, limit, offset int) ([]HistoryEntry, int, error) {
+func (s *Store) History(ctx context.Context, deviceID int64, inProgress bool, limit, offset int) ([]HistoryEntry, int, error) {
 	where := ` WHERE h.id IS NOT NULL`
 	if inProgress {
 		where += ` AND h.completed = 0 AND h.position > 0`
 	}
 	var total int
-	if err := s.DB.QueryRowContext(ctx, `SELECT COUNT(*)`+videoFrom+where).Scan(&total); err != nil {
+	if err := s.DB.QueryRowContext(ctx, `SELECT COUNT(*)`+videoFrom+where, deviceID).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 	rows, err := s.DB.QueryContext(ctx, `SELECT `+videoCols+`, COALESCE(NULLIF(d.device_name, ''), '')`+videoFrom+` LEFT JOIN devices d ON d.id = h.device_id`+where+
-		` ORDER BY h.last_played_at DESC, v.id DESC LIMIT ? OFFSET ?`, limit, offset)
+		` ORDER BY h.last_played_at DESC, v.id DESC LIMIT ? OFFSET ?`, deviceID, limit, offset)
 	if err != nil {
 		return nil, 0, err
 	}

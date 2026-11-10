@@ -1,7 +1,6 @@
 import { h, icon, fmtNumber, swap } from "../dom.js";
 import { request, send, query } from "../api.js";
 import { pageHead, errorState, emptyState, link, confirmDialog, toast, toastError } from "../ui.js";
-import { isHost } from "../role.js";
 import { videoCollection, videoRow, pagination, skeletonGrid } from "../components.js";
 
 const PAGE_SIZE = 48;
@@ -13,7 +12,7 @@ export async function render(ctx) {
   const clearBtn = h("button", { class: "btn danger", type: "button", hidden: true, onclick: clearAll }, icon("trash-2", "sm"), "Clear history");
 
   async function clearAll() {
-    const ok = await confirmDialog({ title: "Clear all history?", message: "Resume positions and watched marks on every device are removed. Your video files are not touched.", confirm: "Clear history", danger: true });
+    const ok = await confirmDialog({ title: "Clear this device's history?", message: "Resume positions and watched marks on this device are removed. Other devices keep their own history, and your video files are not touched.", confirm: "Clear history", danger: true });
     if (!ok) return;
     try {
       await send("DELETE", "/history");
@@ -40,10 +39,10 @@ export async function render(ctx) {
       return;
     }
     const p = env.pagination;
-    clearBtn.hidden = cont || !p.total || !isHost(); // history is shared: clearing it all is host-only
+    clearBtn.hidden = cont || !p.total; // clears this device's history only
     if (!env.data.length) {
       swap(results, cont
-        ? emptyState({ iconName: "circle-play", title: "Nothing in progress", text: "Start a video and stop part-way: it shows up here on every device, ready to resume.", actions: [link("/library", { class: "btn primary" }, icon("film", "sm"), "Browse library")] })
+        ? emptyState({ iconName: "circle-play", title: "Nothing in progress", text: "Start a video and stop part-way: it shows up here, ready to resume.", actions: [link("/library", { class: "btn primary" }, icon("film", "sm"), "Browse library")] })
         : emptyState({ iconName: "history", title: "No history yet", text: "Videos you play are listed here with the device they were played on." }));
       return;
     }
@@ -60,7 +59,6 @@ export async function render(ctx) {
       body = h("div", { class: "list" }, env.data.map((v) => videoRow(v, {
         list: env.data, label, meta: "played",
         side: [
-          h("span", { class: "hide-sm", title: v.device_name ? `Played on ${v.device_name}` : "" }, v.device_name ? [icon("smartphone", "sm"), " ", v.device_name] : null),
           v.completed ? h("span", { class: "badge ok" }, icon("check", "sm"), "Watched") : h("span", { class: "badge info", text: `${Math.round((v.position / (v.duration || 1)) * 100)}%` }),
           h("button", { class: "icon-btn", type: "button", "aria-label": `Remove ${v.title} from history`, title: "Remove from history", onclick: () => remove(v) }, icon("x")),
         ],
@@ -69,6 +67,6 @@ export async function render(ctx) {
     swap(results, h("p", { class: "muted", text: `${fmtNumber(p.total)} ${p.total === 1 ? "video" : "videos"}` }), h("div", { class: "section" }, body), pagination(p, go));
   }
   load();
-  const el = h("div", null, pageHead(cont ? "Continue Watching" : "History", cont ? "Pick up where you left off, on any device." : "Everything played on this server, newest first.", [clearBtn]), results);
+  const el = h("div", null, pageHead(cont ? "Continue Watching" : "History", cont ? "Pick up where you left off on this device." : "Everything played on this device, newest first.", [clearBtn]), results);
   return { el, title: cont ? "Continue Watching" : "History" };
 }

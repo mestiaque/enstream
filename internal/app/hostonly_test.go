@@ -27,7 +27,6 @@ func TestHostOnlyManagement(t *testing.T) {
 		{"POST", "/api/v1/auth/sessions/sign-out-others", ``},
 		{"GET", "/api/v1/backups", ""},
 		{"POST", "/api/v1/backups", ``},
-		{"DELETE", "/api/v1/history", ""},
 		{"DELETE", "/api/v1/devices/1", ""},
 	} {
 		w := do(h, c.method, c.path, phone, strings.NewReader(c.body))

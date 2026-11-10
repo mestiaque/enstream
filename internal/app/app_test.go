@@ -60,7 +60,7 @@ func TestSystemEndpointsAndFrontend(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &info); err != nil || !info.Success {
 		t.Fatalf("info: %s", w.Body)
 	}
-	if info.Data["name"] != "ENStream" || info.Data["schema_version"].(float64) != 2 {
+	if info.Data["name"] != "ENStream" || info.Data["schema_version"].(float64) != 3 {
 		t.Fatalf("info data: %v", info.Data)
 	}
 	if strings.Contains(w.Body.String(), `"path"`) {
