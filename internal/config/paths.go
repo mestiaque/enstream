@@ -10,6 +10,7 @@ import (
 type Paths struct {
 	Data       string // config.json, enstream.db
 	Thumbnails string
+	Previews   string // short hover-preview clips (<id>.mp4)
 	Subtitles  string // converted WebVTT cache
 	Logs       string
 	Backups    string
@@ -45,12 +46,13 @@ func NewPaths(data string) (Paths, error) {
 	p := Paths{
 		Data:       data,
 		Thumbnails: filepath.Join(data, "thumbnails"),
+		Previews:   filepath.Join(data, "previews"),
 		Subtitles:  filepath.Join(data, "cache", "subtitles"),
 		Logs:       filepath.Join(data, "logs"),
 		Backups:    filepath.Join(data, "backups"),
 		Tools:      filepath.Join(data, "tools"),
 	}
-	for _, d := range []string{p.Data, p.Thumbnails, p.Subtitles, p.Logs, p.Backups} {
+	for _, d := range []string{p.Data, p.Thumbnails, p.Previews, p.Subtitles, p.Logs, p.Backups} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			return p, err
 		}

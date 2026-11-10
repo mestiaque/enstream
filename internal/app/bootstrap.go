@@ -78,6 +78,9 @@ func Bootstrap(ctx context.Context, o Options) (*App, error) {
 		log.Warn("could not close interrupted scans", "error", err)
 	}
 	a.Scanner = jobs.NewScanner(a.Store, a.Settings, paths, a.FFmpeg, a.FFprobe, log)
+	a.Previews = jobs.NewPreviewer(a.Store, a.FFmpeg, paths.Previews, log)
+	a.Previews.Busy = func() bool { return a.Scanner.Current() != nil }
+	a.Scanner.OnFinish = a.Previews.Wake
 	a.Auth = &auth.Service{Store: a.Store, Throttle: auth.NewThrottle(), Log: log}
 	if err := a.Auth.Load(ctx); err != nil {
 		db.Close()

@@ -36,6 +36,9 @@ type Scanner struct {
 	ffprobe *media.Tool
 	log     *slog.Logger
 
+	// OnFinish runs after every scan (the preview worker starts on new videos).
+	OnFinish func()
+
 	mu      sync.Mutex
 	current *run
 	done    chan struct{} // closed when the current run ends
@@ -140,6 +143,9 @@ func (s *Scanner) execute(ctx context.Context, r *run, req ScanRequest) {
 		close(s.done)
 		s.current = nil
 		s.mu.Unlock()
+		if s.OnFinish != nil {
+			s.OnFinish()
+		}
 	}()
 	// Progress reaches the database every second, so status survives a crash.
 	stopTicker := make(chan struct{})
@@ -367,6 +373,8 @@ func (s *Scanner) process(ctx context.Context, r *run, f repo.Folder, it workIte
 		r.added.Add(1)
 	} else {
 		r.updated.Add(1)
+		// The file changed: its hover preview is made again from the new content.
+		os.Remove(filepath.Join(s.paths.Previews, fmt.Sprintf("%d.mp4", id)))
 	}
 	if !probeFailed {
 		_ = s.store.ClearFailure(ctx, ff.Path)

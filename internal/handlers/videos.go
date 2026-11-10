@@ -10,6 +10,7 @@ import (
 
 	"enstream/internal/config"
 	repo "enstream/internal/database/repositories"
+	"enstream/internal/jobs"
 	"enstream/internal/media"
 	"enstream/internal/playback"
 	"enstream/internal/security"
@@ -20,7 +21,9 @@ type Videos struct {
 	Store  *repo.Store
 	Paths  config.Paths
 	FFmpeg *media.Tool
-	Log    *slog.Logger
+	// Previews makes hover-preview clips; nil in tests that do not need them.
+	Previews *jobs.Previewer
+	Log      *slog.Logger
 }
 
 const maxPageSize = 100
@@ -125,6 +128,36 @@ func (h *Videos) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 // Thumbnail serves the generated WebP. The stored path must lie in the thumbnails folder.
+// Preview serves the short hover-preview clip (ten one-second pieces from across the video).
+// A missing clip answers 404 and moves the video to the front of the preview queue; the
+// browser then falls back to playing pieces of the original file.
+func (h *Videos) Preview(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	if _, err := h.Store.VideoFile(r.Context(), id); err != nil || h.Previews == nil {
+		http.NotFound(w, r)
+		return
+	}
+	file, err := os.Open(h.Previews.Path(id))
+	if err != nil {
+		h.Previews.Want(id)
+		http.NotFound(w, r)
+		return
+	}
+	defer file.Close()
+	fi, err := file.Stat()
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "video/mp4")
+	// Revalidated each time: the clip is replaced when the video file changes.
+	w.Header().Set("Cache-Control", "private, no-cache")
+	http.ServeContent(w, r, fi.Name(), fi.ModTime(), file)
+}
+
 func (h *Videos) Thumbnail(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r, "id")
 	if !ok {

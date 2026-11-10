@@ -1,28 +1,34 @@
-// Hover preview: resting the mouse on a video card plays short, muted pieces from across the
-// whole video (10 %, 25 %, 40 %, 55 %, 70 %, 85 %), about two seconds each, like a trailer.
-// It streams from the same Range-enabled endpoint as the player, so nothing is generated on
-// the server. Mouse only (touch screens and TVs have no hover), one preview at a time, and it
-// can be turned off in Settings → Appearance.
+// Hover preview: resting the mouse on a video card plays a short muted clip made of ten
+// one-second pieces from across the whole video. The server makes these clips in the
+// background (small 480p files, so they start at once and loop). A video without a clip yet
+// (just added) plays pieces of the original file instead, and the request moves it to the
+// front of the server's queue. Mouse only (touch screens and TVs have no hover), one preview
+// at a time, and it can be turned off in Settings → Appearance.
 import { h } from "./dom.js";
 import { streamURL } from "./api.js";
 import { prefs } from "./store.js";
 
 const POINTS = [0.1, 0.25, 0.4, 0.55, 0.7, 0.85];
 const PIECE_SECONDS = 2.5;
-const START_DELAY = 450; // ms of resting before anything loads
+const START_DELAY = 250; // ms of resting before anything loads
+const CLIP_PIECES = 10; // pieces in a server clip, one second each
+const CLIP_MIN_DURATION = 20; // shorter videos get no clip
+const previewURL = (id) => `/api/v1/videos/${id}/preview`;
 let active = null;
 
 const enabled = () => prefs().hoverPreview !== false && !matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /** Adds the preview to a card thumbnail. `v` is the video from the API. */
 export function attachPreview(thumb, v) {
-  // Formats the browser cannot play would only show an error; keep the thumbnail.
-  if (v.compatibility === "transcode" || !v.duration || v.duration < 4) return;
+  if (!v.duration || v.duration < 4) return;
+  const hasClip = v.duration >= CLIP_MIN_DURATION;
+  // Without a clip, formats the browser cannot play would only show an error.
+  if (!hasClip && v.compatibility === "transcode") return;
   let timer = null;
   thumb.addEventListener("pointerenter", (e) => {
     if (e.pointerType !== "mouse" || !enabled()) return;
     clearTimeout(timer);
-    timer = setTimeout(() => start(thumb, v), START_DELAY);
+    timer = setTimeout(() => (hasClip ? startClip(thumb, v) : start(thumb, v)), START_DELAY);
   });
   thumb.addEventListener("pointerleave", () => {
     clearTimeout(timer);
@@ -34,6 +40,47 @@ function makeVideo() {
   const v = h("video", { class: "hover-preview", muted: true, playsinline: true, preload: "auto", disablepictureinpicture: true, "aria-hidden": "true" });
   v.muted = true; // the attribute alone is not enough for autoplay in every browser
   return v;
+}
+
+// The server clip: one small looping file; the bars follow its playback.
+function startClip(thumb, v) {
+  stop();
+  const video = makeVideo();
+  video.loop = true;
+  const segs = h("div", { class: "preview-segs clip", "aria-hidden": "true" });
+  const bars = Array.from({ length: CLIP_PIECES }, () => h("i", null, h("b")));
+  segs.append(...bars);
+  thumb.classList.add("previewing");
+  thumb.append(video, segs);
+  const state = { thumb, players: [video], segs, stopped: false, frame: 0 };
+  active = state;
+
+  const tick = () => {
+    if (state.stopped) return;
+    const per = (video.duration || CLIP_PIECES) / CLIP_PIECES;
+    const t = video.currentTime / per;
+    const i = Math.min(CLIP_PIECES - 1, Math.floor(t));
+    bars.forEach((b, k) => {
+      b.className = k < i ? "done" : k === i ? "on" : "";
+      b.firstChild.style.width = k < i ? "100%" : k === i ? `${(t - i) * 100}%` : "0";
+    });
+    state.frame = requestAnimationFrame(tick);
+  };
+  video.addEventListener("canplay", () => {
+    if (state.stopped) return;
+    video.play().catch(() => {});
+    video.classList.add("on");
+    cancelAnimationFrame(state.frame);
+    tick();
+  }, { once: true });
+  // No clip yet (404) or it cannot be read: play pieces of the original file instead.
+  video.addEventListener("error", () => {
+    if (state.stopped) return;
+    if (v.compatibility === "transcode") return stop();
+    start(thumb, v);
+  }, { once: true });
+  state.cleanup = () => cancelAnimationFrame(state.frame);
+  video.src = previewURL(v.id);
 }
 
 // Two players take turns: while one plays a piece, the other is already sitting at the next

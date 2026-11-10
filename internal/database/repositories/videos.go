@@ -207,3 +207,29 @@ func (s *Store) Stats(ctx context.Context) (LibraryStats, error) {
 		Scan(&st.Videos, &st.Size, &st.Duration, &st.Folders)
 	return st, err
 }
+
+// PreviewItem is a video the hover-preview worker looks at.
+type PreviewItem struct {
+	ID       int64
+	Path     string
+	Duration float64
+	Enabled  bool // its folder is enabled
+}
+
+// PreviewItems lists every indexed video, newest first (newly added videos get previews first).
+func (s *Store) PreviewItems(ctx context.Context) ([]PreviewItem, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT v.id, v.file_path, v.duration, mf.enabled FROM videos v JOIN media_folders mf ON mf.id = v.folder_id ORDER BY v.created_at DESC, v.id DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []PreviewItem
+	for rows.Next() {
+		var it PreviewItem
+		if err := rows.Scan(&it.ID, &it.Path, &it.Duration, &it.Enabled); err != nil {
+			return nil, err
+		}
+		out = append(out, it)
+	}
+	return out, rows.Err()
+}

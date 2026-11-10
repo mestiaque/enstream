@@ -43,6 +43,7 @@ func Run(ctx context.Context, o Options) error {
 		Daily: func(ctx context.Context) { _ = a.Store.PurgeExpiredSessions(ctx) },
 	}
 	go sched.Run(ctx)
+	go a.Previews.Run(ctx)
 	return a.Serve(ctx, h, a.Scanner.Shutdown)
 }
 
@@ -59,7 +60,7 @@ func (a *App) Handler() (http.Handler, error) {
 	}
 	folders := &handlers.Folders{Store: a.Store, Scanner: a.Scanner, Log: a.Log}
 	scans := &handlers.Scanner{Store: a.Store, Scanner: a.Scanner, Log: a.Log}
-	videos := &handlers.Videos{Store: a.Store, Paths: a.Paths, FFmpeg: a.FFmpeg, Log: a.Log}
+	videos := &handlers.Videos{Store: a.Store, Paths: a.Paths, FFmpeg: a.FFmpeg, Previews: a.Previews, Log: a.Log}
 	stream := &streaming.Handler{Store: a.Store, Log: a.Log}
 	play := &handlers.Playback{Store: a.Store, Service: &playback.Service{Store: a.Store}, Scanner: a.Scanner, Log: a.Log}
 	settings := &handlers.Settings{Live: a.Settings, Auth: a.Auth, Log: a.Log, Server: func() config.Server { return a.Config.Server }}
@@ -101,6 +102,7 @@ func (a *App) Handler() (http.Handler, error) {
 			r.Get("/videos/extensions", videos.Extensions)
 			r.Get("/videos/{id}", videos.Get)
 			r.Get("/videos/{id}/thumbnail", videos.Thumbnail)
+			r.Get("/videos/{id}/preview", videos.Preview)
 			r.Get("/videos/{id}/stream", stream.Stream)
 			r.Head("/videos/{id}/stream", stream.Stream)
 			r.Get("/videos/{id}/subtitles/{sid}", videos.Subtitle)
