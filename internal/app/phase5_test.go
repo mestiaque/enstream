@@ -44,7 +44,7 @@ func (c *client) do(method, path, body string, headers ...string) *httptest.Resp
 
 func TestPINSessionsAndCSRF(t *testing.T) {
 	_, h := newTestApp(t)
-	owner := &client{t: t, h: h, ip: "192.168.1.10"}
+	owner := &client{t: t, h: h, ip: "127.0.0.1"} // the host
 	guest := &client{t: t, h: h, ip: "192.168.1.20"}
 
 	// No PIN: everything is open.
@@ -106,10 +106,11 @@ func TestPINSessionsAndCSRF(t *testing.T) {
 	if w := other.do("POST", "/api/v1/scanner/scan", `{}`, "Origin", "http://evil.example"); w.Code != 403 {
 		t.Fatalf("cross-origin POST: %d", w.Code)
 	}
-	if w := other.do("PUT", "/api/v1/settings", `{}`, "Sec-Fetch-Site", "cross-site"); w.Code != 403 {
+	// (Settings are host-only now; naming this device is a state change any device may make.)
+	if w := other.do("PUT", "/api/v1/devices/current", `{"name":"Tablet"}`, "Sec-Fetch-Site", "cross-site", "X-Device-Token", "tablet-ABCDEFGHIJKL"); w.Code != 403 {
 		t.Fatalf("cross-site PUT: %d", w.Code)
 	}
-	if w := other.do("PUT", "/api/v1/settings", `{}`, "Origin", "http://example.com"); w.Code != 200 {
+	if w := other.do("PUT", "/api/v1/devices/current", `{"name":"Tablet"}`, "Origin", "http://example.com", "X-Device-Token", "tablet-ABCDEFGHIJKL"); w.Code != 200 {
 		t.Fatalf("same-origin PUT: %d %s", w.Code, w.Body)
 	}
 
@@ -143,7 +144,7 @@ func TestPINSessionsAndCSRF(t *testing.T) {
 
 func TestSettingsAPI(t *testing.T) {
 	a, h := newTestApp(t)
-	c := &client{t: t, h: h, ip: "192.168.1.10"}
+	c := &client{t: t, h: h, ip: "127.0.0.1"} // the host
 	w := c.do("GET", "/api/v1/settings", "")
 	if w.Code != 200 || !strings.Contains(w.Body.String(), `"worker_count":3`) || !strings.Contains(w.Body.String(), `"pin_enabled":false`) {
 		t.Fatalf("get: %s", w.Body)
@@ -174,7 +175,7 @@ func TestSettingsAPI(t *testing.T) {
 
 func TestBackupAndRestore(t *testing.T) {
 	a, h := newTestApp(t)
-	c := &client{t: t, h: h, ip: "192.168.1.10"}
+	c := &client{t: t, h: h, ip: "127.0.0.1"} // the host
 	ctx := context.Background()
 	media := t.TempDir()
 	a.Store.AddFolder(ctx, media, "Before")
@@ -267,7 +268,7 @@ func TestSchedulerAutoScanAndBackup(t *testing.T) {
 
 func TestFolderBrowserQRAndTools(t *testing.T) {
 	a, h := newTestApp(t)
-	c := &client{t: t, h: h, ip: "192.168.1.10"}
+	c := &client{t: t, h: h, ip: "127.0.0.1"} // the host
 	root := t.TempDir()
 	os.MkdirAll(root+"/Movies/Old", 0o755)
 	os.MkdirAll(root+"/.hidden", 0o755)

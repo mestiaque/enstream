@@ -2,6 +2,7 @@ import { h, icon, fmtNumber, fmtSize, fmtLongDuration, fmtAgo, swap } from "../d
 import { get } from "../api.js";
 import { link, errorState, loading, emptyState } from "../ui.js";
 import { videoCollection } from "../components.js";
+import { isHost } from "../role.js";
 import { welcomed } from "./welcome.js";
 
 function greeting() {
@@ -16,7 +17,7 @@ function section(title, iconName, href, body) {
 
 export async function render(ctx) {
   // First start: no folders yet → the setup wizard.
-  if (!welcomed()) {
+  if (isHost() && !welcomed()) {
     const folders = await get("/folders").catch(() => null);
     if (folders && !folders.length) {
       queueMicrotask(() => ctx.navigate("/welcome", { replace: true }));
@@ -37,10 +38,12 @@ export async function render(ctx) {
     const noFolders = !s.folders;
     const summary = [`${fmtNumber(s.videos)} ${s.videos === 1 ? "video" : "videos"}`, fmtLongDuration(s.total_duration), fmtSize(s.total_size)];
     if (d.scanning) summary.push("scanning…");
-    const parts = [h("div", { class: "hero" }, h("h1", { text: greeting() }), h("p", { text: noFolders ? "Add a folder with your videos to start your library." : summary.join("  ·  ") }))];
+    const parts = [h("div", { class: "hero" }, h("h1", { text: greeting() }), h("p", { text: noFolders ? (isHost() ? "Add a folder with your videos to start your library." : "No videos have been shared yet.") : summary.join("  ·  ") }))];
     if (noFolders) {
-      parts.push(h("div", { class: "section" }, emptyState({ iconName: "folder-plus", title: "Your library is empty", text: "Pick a folder on this computer, for example Videos or Movies. Your files stay where they are; ENStream only reads them.",
-        actions: [link("/folders", { class: "btn primary" }, icon("folder-plus", "sm"), "Add a folder")] })));
+      parts.push(h("div", { class: "section" }, isHost()
+        ? emptyState({ iconName: "folder-plus", title: "Your library is empty", text: "Pick a folder on this computer, for example Videos or Movies. Your files stay where they are; ENStream only reads them.",
+          actions: [link("/folders", { class: "btn primary" }, icon("folder-plus", "sm"), "Add a folder")] })
+        : emptyState({ iconName: "monitor", title: "Nothing to watch yet", text: "Videos appear here once folders are added in ENStream on the computer that shares them." })));
     } else {
       if (d.continue_watching.length) parts.push(section("Continue Watching", "circle-play", "/continue", videoCollection(d.continue_watching, { rail: true, mode: "grid", label: "Continue watching", meta: "played" })));
       if (d.recently_added.length) parts.push(section("Recently Added", "clock", "/recent", videoCollection(d.recently_added, { rail: true, mode: "grid", label: "Recently added" })));

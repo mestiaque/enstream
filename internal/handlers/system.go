@@ -2,6 +2,7 @@
 package handlers
 
 import (
+	"enstream/internal/security"
 	qrcode "github.com/skip2/go-qrcode"
 
 	"context"
@@ -63,6 +64,8 @@ func (s *System) Info(w http.ResponseWriter, r *http.Request) {
 		"schema_version": v,
 		"ffmpeg":         tool(s.FFmpeg),
 		"ffprobe":        tool(s.FFprobe),
+		// The computer ENStream runs on gets library management; other devices only watch.
+		"host": security.IsHost(r),
 	})
 }
 

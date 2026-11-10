@@ -30,7 +30,7 @@ func call(t *testing.T, h http.Handler, method, path, body string) (int, envelop
 	} else {
 		rd = strings.NewReader("")
 	}
-	w := do(h, method, path, "192.168.1.30:4000", rd)
+	w := do(h, method, path, "127.0.0.1:4000", rd) // the host: library management is host-only
 	var e envelope
 	if strings.HasPrefix(w.Header().Get("Content-Type"), "application/json") {
 		if err := json.Unmarshal(w.Body.Bytes(), &e); err != nil {
@@ -240,8 +240,12 @@ func TestPlaybackHistoryDevicesAndSubtitles(t *testing.T) {
 		t.Fatal("unknown subtitle")
 	}
 
-	if c := send("DELETE", "/api/v1/history", "", tok); c != 200 {
-		t.Fatal("clear history")
+	// History is shared by every device: clearing all of it is host-only.
+	if c := send("DELETE", "/api/v1/history", "", tok); c != 403 {
+		t.Fatalf("phone cleared the shared history: %d", c)
+	}
+	if c, _ := call(t, h, "DELETE", "/api/v1/history", ""); c != 200 {
+		t.Fatal("clear history on the host")
 	}
 	if _, e = call(t, h, "GET", "/api/v1/history", ""); e.Pagination.Total != 0 {
 		t.Fatal("history not cleared")

@@ -6,11 +6,14 @@ import { loading, toast, toastError, copyText, confirmDialog, errorState } from 
 import { prefs, setPref, applyAppearance, ACCENTS } from "../store.js";
 import { setPinEnabled } from "../shell.js";
 import { desktop, checkForUpdate, showUpdateDialog, openAppFolder } from "../desktop.js";
+import { isHost } from "../role.js";
 
 const SECTIONS = [
   ["general", "General"], ["appearance", "Appearance"], ["library", "Library"], ["security", "Security"],
   ["backups", "Backups"], ["network", "Network"], ["about", "About"],
 ];
+// Phones, TVs and other computers: only what concerns this device, plus About.
+const VIEWER_SECTIONS = [["general", "General"], ["appearance", "Appearance"], ["about", "About"]];
 const SHORTCUTS = [
   ["Play / pause", "Space"], ["Back / forward 5 s", "← →"], ["Back / forward 10 s", "J L"], ["Volume", "↑ ↓"], ["Mute", "M"], ["Full screen", "F"],
   ["Subtitles", "C"], ["Speed", "< >"], ["Next / previous video", "N P"], ["Jump to 0–90 %", "0–9"], ["Search", "/"], ["Toggle sidebar", "Ctrl B"],
@@ -89,7 +92,8 @@ let openDlg = null;
 
 export function openSettings(tab) {
   if (openDlg) openDlg.close();
-  let section = SECTIONS.some(([k]) => k === tab) ? tab : "general";
+  const sections = isHost() ? SECTIONS : VIEWER_SECTIONS;
+  let section = sections.some(([k]) => k === tab) ? tab : "general";
   let settings = null;
   let info = null;
   const body = h("div", { class: "settings-body" });
@@ -167,8 +171,10 @@ export function openSettings(tab) {
         if (!(await confirmDialog({ title: "Forget this device?", message: "Its name is removed. Playback positions stay in the library.", confirm: "Forget", danger: true }))) return;
         try { await send("DELETE", `/devices/${d.id}`); drawDevices(await get("/devices")); } catch (err) { toastError(err); }
       } }, icon("trash-2")))) : h("p", { class: "hint", text: "No device has played anything yet." }));
-    drawDevices(devices);
-    out.push(group("Devices"), devBox);
+    if (isHost()) { // the device list (and forgetting devices) is part of managing the server
+      drawDevices(devices);
+      out.push(group("Devices"), devBox);
+    }
     return out;
   }
 
@@ -376,6 +382,7 @@ export function openSettings(tab) {
       `Database schema v${info.schema_version} · ${info.go_version}`,
     ].join("\n"), "Diagnostics copied");
 
+    if (!isHost()) return viewerAbout(info, box, line, val, ext);
     const thisCopy = [
       line("Version", null, val(info.version, true)),
       line("System", null, val(`${PLATFORM[os] || os} · ${arch}`)),
@@ -407,6 +414,28 @@ export function openSettings(tab) {
       box("Keyboard shortcuts", h("div", { class: "kbd-list" }, SHORTCUTS.map(([a, k]) => h("div", null, h("span", { text: a }), h("span", null, k.split(" ").map((x) => h("kbd", { text: x }))))))),
     );
     return out;
+  }
+
+  // About on a phone, TV or other computer: what ENStream is, this device and the developer;
+  // the server's technical details stay on the host.
+  function viewerAbout(info, box, line, val, ext) {
+    return [
+      h("div", { class: "about" }, h("img", { src: "/static/assets/enstream-icon.svg", alt: "", draggable: "false" }), h("div", null,
+        h("div", { class: "about-name" }, "ENStream ", h("span", { class: "muted", text: info.version })),
+        h("div", { class: "muted", text: "Your personal cinema, streamed to every screen at home." }),
+        h("div", { class: "hint", text: "Videos come from the computer that runs ENStream; nothing is uploaded to the internet." }))),
+      box("This device", [
+        line("Watching from", null, val(describeUA(navigator.userAgent))),
+        line("Connected to", "The computer that shares the videos", val(location.host, true)),
+      ]),
+      box("Keyboard shortcuts", h("div", { class: "kbd-list" }, SHORTCUTS.map(([a, k]) => h("div", null, h("span", { text: a }), h("span", null, k.split(" ").map((x) => h("kbd", { text: x }))))))),
+      box("Developer", [
+        line("Developed by", null, val("M. Estiaque Ahmed Khan")),
+        line("Contact", "Bug reports, ideas and feedback are welcome", ext("mailto:info@mestiaque.com", "info@mestiaque.com")),
+        line("Website", null, ext("https://mestiaque.com", "mestiaque.com")),
+        line("Licence", null, val("© 2026 M. Estiaque Ahmed Khan · MIT")),
+      ]),
+    ];
   }
 
   async function ffmpegRow() {
@@ -449,7 +478,7 @@ export function openSettings(tab) {
       if (my === seq) swap(body, errorState(err, draw));
     }
   }
-  for (const [key, label] of SECTIONS) nav.append(h("button", { type: "button", role: "tab", dataset: { section: key }, text: label, onclick: () => { section = key; draw(); } }));
+  for (const [key, label] of sections) nav.append(h("button", { type: "button", role: "tab", dataset: { section: key }, text: label, onclick: () => { section = key; draw(); } }));
   document.body.append(dlg);
   dlg.showModal();
   draw();

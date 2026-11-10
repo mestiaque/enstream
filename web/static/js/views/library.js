@@ -2,6 +2,7 @@ import { h, icon, fmtNumber, swap } from "../dom.js";
 import { get, request, query } from "../api.js";
 import { pageHead, errorState, emptyState, link } from "../ui.js";
 import { videoCollection, pagination, skeletonGrid } from "../components.js";
+import { isHost } from "../role.js";
 import { prefs, setPref } from "../store.js";
 
 const SORTS = [
@@ -114,7 +115,8 @@ export async function render(ctx) {
     if (!env.data.length) {
       const filtered = state.search || state.folder_id || state.extension || state.resolution || state.watched;
       swap(results, filtered ? emptyState({ iconName: "search", title: "No matching videos", text: "Try another search or remove a filter." })
-        : emptyState({ iconName: "folder-plus", title: "No videos yet", text: "Add a folder and scan it to fill your library.", actions: [link("/folders", { class: "btn primary" }, icon("folder-plus", "sm"), "Add a folder")] }));
+        : isHost() ? emptyState({ iconName: "folder-plus", title: "No videos yet", text: "Add a folder and scan it to fill your library.", actions: [link("/folders", { class: "btn primary" }, icon("folder-plus", "sm"), "Add a folder")] })
+          : emptyState({ iconName: "monitor", title: "No videos yet", text: "Videos appear here once folders are added on the computer that runs ENStream." }));
       return;
     }
     if (state.page > p.total_pages) return update({ page: p.total_pages }, false);

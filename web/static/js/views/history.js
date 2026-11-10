@@ -1,6 +1,7 @@
 import { h, icon, fmtNumber, swap } from "../dom.js";
 import { request, send, query } from "../api.js";
 import { pageHead, errorState, emptyState, link, confirmDialog, toast, toastError } from "../ui.js";
+import { isHost } from "../role.js";
 import { videoCollection, videoRow, pagination, skeletonGrid } from "../components.js";
 
 const PAGE_SIZE = 48;
@@ -39,7 +40,7 @@ export async function render(ctx) {
       return;
     }
     const p = env.pagination;
-    clearBtn.hidden = cont || !p.total;
+    clearBtn.hidden = cont || !p.total || !isHost(); // history is shared: clearing it all is host-only
     if (!env.data.length) {
       swap(results, cont
         ? emptyState({ iconName: "circle-play", title: "Nothing in progress", text: "Start a video and stop part-way: it shows up here on every device, ready to resume.", actions: [link("/library", { class: "btn primary" }, icon("film", "sm"), "Browse library")] })

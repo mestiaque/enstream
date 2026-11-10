@@ -3,6 +3,7 @@ import { get, request } from "./api.js";
 import { toast, openMenu, copyText } from "./ui.js";
 import { initDesktop, desktop, openExternal } from "./desktop.js";
 import { prefs, setPref, applyAppearance } from "./store.js";
+import { isHost, setHost } from "./role.js";
 
 // ------------------------------------------------------------------ routes
 // Each view module exports render(ctx) -> { el, destroy?, title? } (may be async).
@@ -28,6 +29,9 @@ const LIBRARY = [
   { href: "/history", label: "History", icon: "history", key: "history" },
 ];
 const BOTTOM = [["home", "/", "house", "Home"], ["library", "/library", "layout-grid", "Library"], ["continue", "/continue", "circle-play", "Continue"], ["folders", "/folders", "folder", "Folders"], ["settings", "/settings", "settings", "Settings"]];
+const BOTTOM_VIEWER = [["home", "/", "house", "Home"], ["library", "/library", "layout-grid", "Library"], ["continue", "/continue", "circle-play", "Continue"], ["history", "/history", "history", "History"], ["settings", "/settings", "settings", "Settings"]];
+// Pages that manage the library exist only on the host.
+const HOST_PAGES = new Set(["folders", "welcome"]);
 
 const view = document.getElementById("view");
 const sidebar = document.getElementById("sidebar");
@@ -66,11 +70,12 @@ function buildNav() {
   const nav = document.getElementById("nav");
   nav.append(
     h("div", { class: "nav-section" }, h("div", { class: "nav-label" }, h("span", { text: "Library" })), LIBRARY.map((i) => navLink(i.href, i.label, i.icon, i.key, i.count))),
+    // Viewers browse by folder; adding and managing folders is for the host.
     h("div", { class: "nav-section" }, h("div", { class: "nav-label" }, h("span", { text: "Folders" }),
-      h("a", { class: "icon-btn", href: "/folders", "data-link": "", title: "Add a folder", "aria-label": "Add a folder" }, icon("plus"))),
-      navLink("/folders", "All folders", "folder-open", "folders"), folderBox));
+      isHost() ? h("a", { class: "icon-btn", href: "/folders", "data-link": "", title: "Add a folder", "aria-label": "Add a folder" }, icon("plus")) : null),
+      isHost() ? navLink("/folders", "All folders", "folder-open", "folders") : null, folderBox));
   const bottom = document.getElementById("bottom-nav");
-  for (const [key, href, ic, label] of BOTTOM) bottom.append(h("a", { href, "data-link": "", dataset: { key } }, icon(ic), h("span", { text: label })));
+  for (const [key, href, ic, label] of isHost() ? BOTTOM : BOTTOM_VIEWER) bottom.append(h("a", { href, "data-link": "", dataset: { key } }, icon(ic), h("span", { text: label })));
   scrim.addEventListener("click", () => setMenu(false));
   document.getElementById("search-icon").append(icon("search", "sm"));
   buildTopbar();
@@ -80,7 +85,7 @@ async function refreshFolders() {
   try {
     const list = await get("/folders");
     swap(folderBox, list.length ? list.map((f) => navLink(`/library?folder_id=${f.id}`, f.name, f.available ? "folder" : "circle-alert", `folder:${f.id}`))
-      : h("div", { class: "nav-empty", text: "No folders yet" }));
+      : h("div", { class: "nav-empty", text: isHost() ? "No folders yet" : "No folders shared yet" }));
     for (const f of list) {
       const a = folderBox.querySelector(`[data-key="folder:${f.id}"]`);
       if (a && f.video_count) a.append(h("span", { class: "count", text: fmtNumber(f.video_count) }));
@@ -109,7 +114,8 @@ function buildTopbar() {
   const moreBtn = h("button", { class: "icon-btn", type: "button", "aria-label": "More", title: "More" }, icon("more-horizontal"));
   moreBtn.addEventListener("click", () => openMenu(moreBtn, moreEntries()));
   const gear = h("button", { class: "icon-btn", type: "button", "aria-label": "Settings", title: "Settings (Ctrl+,)", onclick: () => openSettingsDialog() }, icon("settings"));
-  right.append(scanBtn, addBtn, h("span", { class: "tb-sep hide-sm" }), themeBtn, moreBtn, gear);
+  if (isHost()) right.append(scanBtn, addBtn, h("span", { class: "tb-sep hide-sm" }));
+  right.append(themeBtn, moreBtn, gear);
 }
 
 const THEMES = [["dark", "Dark", "moon"], ["light", "Light", "sun"], ["glass", "Glass", "sparkles"], ["system", "System", "monitor"]];
@@ -214,6 +220,10 @@ async function render() {
     return;
   }
   const [re, load, key] = match;
+  if (HOST_PAGES.has(key) && !isHost()) {
+    history.replaceState({}, "", "/");
+    return render();
+  }
   const folderId = key === "library" ? new URLSearchParams(location.search).get("folder_id") : null;
   setActive(folderId ? `folder:${folderId}` : key);
   const params = path.match(re).slice(1);
@@ -366,13 +376,15 @@ window.addEventListener("enstream:library-changed", () => refreshCount());
 
 export async function boot() {
   if (prefs().sidebarCollapsed) document.body.classList.add("sidebar-collapsed");
-  buildNav();
   await initDesktop().catch((e) => console.error(e));
   try {
     const st = await get("/auth/status");
     pinEnabled = st.pin_enabled;
     authRequired = !st.authenticated;
+    setHost(st.host);
   } catch { /* offline: the page shows the error */ }
+  buildNav(); // after the role is known: viewers get a shorter menu
+
   render();
   pollScan();
   refreshCount();

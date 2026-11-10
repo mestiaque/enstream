@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"enstream/internal/security"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -35,7 +36,8 @@ func (h *Auth) fail(w http.ResponseWriter, r *http.Request, err error) {
 func (h *Auth) Status(w http.ResponseWriter, r *http.Request) {
 	_, ok := h.Service.Session(r)
 	enabled := h.Service.Enabled()
-	server.OK(w, map[string]bool{"pin_enabled": enabled, "authenticated": !enabled || ok})
+	// "host": the computer ENStream runs on (library management); other devices only watch.
+	server.OK(w, map[string]bool{"pin_enabled": enabled, "authenticated": !enabled || ok, "host": security.IsHost(r)})
 }
 
 func (h *Auth) Login(w http.ResponseWriter, r *http.Request) {
