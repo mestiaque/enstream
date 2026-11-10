@@ -123,6 +123,8 @@ struct AppInfo {
 fn app_info(app: AppHandle) -> AppInfo {
     AppInfo {
         version: app.package_info().version.to_string(),
+        tauri: tauri::VERSION,
+        webview: tauri::webview_version().unwrap_or_default(),
         platform: std::env::consts::OS,
         arch: std::env::consts::ARCH,
         data_dir: paths::data_dir().to_string_lossy().into_owned(),
