@@ -3,9 +3,11 @@ import { get, send, request } from "../api.js";
 import { pageHead, errorState, loading, toast, toastError, copyText, confirmDialog } from "../ui.js";
 import { prefs, setPref } from "../store.js";
 import { setPinEnabled } from "../shell.js";
+import { desktop, checkForUpdate, showUpdateDialog, openAppFolder } from "../desktop.js";
 
 const TABS = [
-  ["general", "General", "monitor"], ["library", "Library", "film"], ["security", "Security", "lock"],
+  ["general", "General", "monitor"],
+  ...(desktop.available ? [["desktop", "Desktop", "power"]] : []), ["library", "Library", "film"], ["security", "Security", "lock"],
   ["backups", "Backups", "hard-drive"], ["about", "About", "info"],
 ];
 const SHORTCUTS = [
@@ -254,7 +256,9 @@ export async function render(ctx) {
         return h("div", { class: "backup-row" }, h("div", { class: "icon-wrap" }, icon("hard-drive")),
           h("div", null, h("strong", { text: fmtDate(b.created_at) }), " ", h("span", { class: `badge ${cls}`, text: label }), h("small", { text: `${b.name} · ${fmtSize(b.size)}` })),
           h("div", { class: "actions" },
-            h("a", { class: "icon-btn", href: `/api/v1/backups/${encodeURIComponent(b.name)}`, download: b.name, "aria-label": `Download ${b.name}`, title: "Download" }, icon("download")),
+            desktop.available
+              ? h("button", { class: "icon-btn", type: "button", "aria-label": "Show in folder", title: "Show in folder", onclick: () => openAppFolder("backups") }, icon("folder-open"))
+              : h("a", { class: "icon-btn", href: `/api/v1/backups/${encodeURIComponent(b.name)}`, download: b.name, "aria-label": `Download ${b.name}`, title: "Download" }, icon("download")),
             h("button", { class: "icon-btn", type: "button", "aria-label": `Restore ${b.name}`, title: "Restore", onclick: () => restore(b) }, icon("rotate-ccw")),
             h("button", { class: "icon-btn", type: "button", "aria-label": `Delete ${b.name}`, title: "Delete", onclick: () => remove(b) }, icon("trash-2"))));
       }));
@@ -289,7 +293,71 @@ export async function render(ctx) {
       panel("Backups", "hard-drive", [h("div", null, createBtn), h("div", { class: "section" }, listBox)])));
   }
 
+  // ------------------------------------------------------------------ desktop app
+  async function desktopTab() {
+    const [ds, app] = await Promise.all([desktop.invoke("desktop_settings"), desktop.invoke("app_info")]);
+    const setD = async (key, value, input, msg) => {
+      try { await desktop.invoke("set_desktop_setting", { key, value }); toast(msg, { type: "success", timeout: 2000 }); }
+      catch (err) { toastError({ message: String(err) }); if (input) input.checked = !value; }
+    };
+    const status = h("p", { class: "muted" });
+    const checkBtn = h("button", { class: "btn", type: "button", onclick: async () => {
+      checkBtn.disabled = true;
+      status.textContent = "Checking…";
+      try {
+        const u = await checkForUpdate({ quiet: false });
+        await desktop.invoke("set_desktop_setting", { key: "last_update_check", value: Math.floor(Date.now() / 1000) });
+        status.textContent = u ? `Version ${u.version} is available.` : `You have the latest version (${app.version}).`;
+        if (u) showUpdateDialog();
+      } catch (err) { status.textContent = `Couldn't check: ${err}`; }
+      checkBtn.disabled = false;
+    } }, icon("refresh-cw", "sm"), "Check for updates");
+    return h("div", { class: "settings" },
+      panel("Startup and tray", "power", [
+        switchRow("Start with this computer", "ENStream starts in the tray when you sign in, so phones and TVs can always watch.", ds.autostart, (v, i) => setD("autostart", v, i, v ? "ENStream starts with the computer" : "Autostart off")),
+        switchRow("Keep running when the window is closed", "Closing the window leaves ENStream in the system tray. Quit from the tray menu.", ds.close_to_tray, (v, i) => setD("close_to_tray", v, i, "Saved")),
+      ]),
+      panel("Updates", "download", [
+        switchRow("Check for updates every day", "Only asks for the latest version number; nothing about you is sent.", ds.auto_update, (v, i) => setD("auto_update", v, i, "Saved")),
+        h("div", { class: "setting-row" }, h("div", null, h("strong", { text: `Version ${app.version}` }), status), checkBtn),
+      ]),
+      panel("Folders", "folder-open", h("dl", { class: "kv" },
+        h("dt", { text: "Library data" }), h("dd", null, h("span", { class: "mono", text: app.data_dir }), " ", h("button", { class: "btn sm ghost", type: "button", onclick: () => openAppFolder("data") }, icon("folder-open", "sm"), "Open")),
+        h("dt", { text: "Logs" }), h("dd", null, h("button", { class: "btn sm ghost", type: "button", onclick: () => openAppFolder("logs") }, icon("folder-open", "sm"), "Open")))));
+  }
+
   // ------------------------------------------------------------------ about
+  function ffmpegBox() {
+    const msg = h("div", null, h("strong", { text: "FFmpeg is missing" }), "Videos still play, but thumbnails, durations and format checks need FFmpeg.");
+    const box = h("div", { class: "compat warn section" }, icon("info"), msg);
+    get("/system/ffmpeg").then((t) => {
+      if (!t.can_install) return msg.append(h("p", { class: "mono", text: t.hint }));
+      const bar = h("i");
+      const progress = h("div", { class: "bar", hidden: !t.installing }, bar);
+      const btn = h("button", { class: "btn primary sm", type: "button", disabled: t.installing }, icon("download", "sm"), "Install FFmpeg");
+      msg.append(progress, h("div", { class: "section" }, btn));
+      const watch = () => {
+        const id = setInterval(async () => {
+          const s = await get("/system/ffmpeg").catch(() => null);
+          if (!s) return;
+          if (s.total) bar.style.width = `${Math.round((s.done / s.total) * 100)}%`;
+          if (!s.installing) {
+            clearInterval(id);
+            if (s.ffmpeg.available) { toast(`FFmpeg ${s.ffmpeg.version} installed`, { type: "success" }); draw(); }
+            else { toastError({ message: s.error || "FFmpeg could not be installed" }); btn.disabled = false; progress.hidden = true; }
+          }
+        }, 800);
+      };
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        progress.hidden = false;
+        try { await send("POST", "/system/ffmpeg/install"); watch(); } catch (err) { toastError(err); btn.disabled = false; }
+      });
+      if (t.installing) watch();
+    }).catch(() => {});
+    return box;
+  }
+
   function about() {
     const toolRow = (name, t) => [h("dt", { text: name }), h("dd", null, t?.available ? h("span", { class: "badge ok" }, icon("check", "sm"), t.version || "Available")
       : h("span", { class: "badge bad", title: t?.message || "", text: "Not found" }))];
@@ -308,11 +376,11 @@ export async function render(ctx) {
         h("dt", { text: "Platform" }), h("dd", { text: info.platform }),
         toolRow("FFmpeg", info.ffmpeg), toolRow("FFprobe", info.ffprobe),
         h("dt", { text: "Database" }), h("dd", { text: `Schema v${info.schema_version}` }))),
-        !info.ffmpeg?.available || !info.ffprobe?.available ? h("p", { class: "compat warn section" }, icon("info"), h("div", null, h("strong", { text: "FFmpeg is missing" }), "Videos still play, but thumbnails, durations and format checks need FFmpeg on the server computer.")) : null),
+        !info.ffmpeg?.available || !info.ffprobe?.available ? ffmpegBox() : null),
       panel("Keyboard shortcuts", "info", h("div", { class: "kbd-list" }, SHORTCUTS.map(([a, k]) => h("div", null, h("span", { text: a }), h("span", null, k.split(" ").map((x) => h("kbd", { text: x })))))), "wide"));
   }
 
-  const views = { general, library, security, backups, about };
+  const views = { general, desktop: desktopTab, library, security, backups, about };
   let seq = 0;
   async function draw() {
     const my = ++seq;

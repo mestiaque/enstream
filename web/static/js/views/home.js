@@ -2,6 +2,7 @@ import { h, icon, fmtNumber, fmtSize, fmtLongDuration, fmtAgo, swap } from "../d
 import { get } from "../api.js";
 import { link, errorState, loading, emptyState, copyText } from "../ui.js";
 import { videoCollection } from "../components.js";
+import { welcomed } from "./welcome.js";
 
 function greeting() {
   const hr = new Date().getHours();
@@ -26,7 +27,15 @@ function addresses(info) {
         h("small", { class: "hide-sm", text: a.interface }), h("button", { class: "icon-btn", type: "button", "aria-label": `Copy ${a.url}`, onclick: () => copyText(a.url, "Address copied") }, icon("copy", "sm")))))));
 }
 
-export async function render() {
+export async function render(ctx) {
+  // First start: no folders yet → the setup wizard.
+  if (!welcomed()) {
+    const folders = await get("/folders").catch(() => null);
+    if (folders && !folders.length) {
+      queueMicrotask(() => ctx.navigate("/welcome", { replace: true }));
+      return { el: h("div"), title: "Home" };
+    }
+  }
   const el = h("div");
   const draw = async () => {
     swap(el, loading());

@@ -16,6 +16,8 @@ type Settings struct {
 	Live *config.Live
 	Auth *auth.Service
 	Log  *slog.Logger
+	// Server is the address actually in use (the desktop app may pick another free port).
+	Server func() config.Server
 }
 
 type settingsView struct {
@@ -47,6 +49,9 @@ func (h *Settings) view() settingsView {
 	v.Scanner.ExcludedDirectories, v.Scanner.IncludeHidden = c.Scanner.ExcludedDirectories, c.Scanner.IncludeHidden
 	v.Media.Extensions, v.Media.DefaultExtensions = c.Media.Extensions, config.DefaultExtensions
 	v.Thumbnail, v.Backup, v.Server = c.Thumbnail, c.Backup, c.Server
+	if h.Server != nil {
+		v.Server = h.Server()
+	}
 	v.Security.PINEnabled = h.Auth.Enabled()
 	v.Security.AllowedNetworks = c.Security.AllowedNetworks
 	if len(v.Security.AllowedNetworks) == 0 {

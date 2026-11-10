@@ -1,6 +1,7 @@
 import { h, icon, clear, isTyping } from "./dom.js";
 import { get, request } from "./api.js";
 import { toast } from "./ui.js";
+import { initDesktop } from "./desktop.js";
 
 // ------------------------------------------------------------------ routes
 // Each view module exports render(ctx) -> { el, destroy?, title? } (may be async).
@@ -15,6 +16,7 @@ const routes = [
   [/^\/folders$/, () => import("./views/folders.js"), "folders"],
   [/^\/settings$/, () => import("./views/settings.js"), "settings"],
   [/^\/login$/, () => import("./views/login.js"), "login"],
+  [/^\/welcome$/, () => import("./views/welcome.js"), "welcome"],
 ];
 
 const NAV = [
@@ -118,7 +120,7 @@ async function render() {
   const match = routes.find(([re]) => re.test(path));
   try { current?.destroy?.(); } catch (e) { console.error(e); }
   current = null;
-  document.body.classList.remove("watching", "signin");
+  document.body.classList.remove("watching", "signin", "setup");
   if (authRequired && path !== "/login") {
     history.replaceState({}, "", "/login?next=" + encodeURIComponent(location.pathname + location.search));
     return render();
@@ -269,6 +271,7 @@ export async function refreshCount() {
 }
 
 export async function boot() {
+  await initDesktop().catch((e) => console.error(e));
   buildNav();
   try {
     const st = await get("/auth/status");

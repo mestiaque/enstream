@@ -13,6 +13,7 @@ type Paths struct {
 	Subtitles  string // converted WebVTT cache
 	Logs       string
 	Backups    string
+	Tools      string // FFmpeg installed by ENStream (Windows)
 }
 
 // DataDir picks the per-user data directory:
@@ -47,6 +48,7 @@ func NewPaths(data string) (Paths, error) {
 		Subtitles:  filepath.Join(data, "cache", "subtitles"),
 		Logs:       filepath.Join(data, "logs"),
 		Backups:    filepath.Join(data, "backups"),
+		Tools:      filepath.Join(data, "tools"),
 	}
 	for _, d := range []string{p.Data, p.Thumbnails, p.Subtitles, p.Logs, p.Backups} {
 		if err := os.MkdirAll(d, 0o755); err != nil {

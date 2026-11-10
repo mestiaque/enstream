@@ -97,5 +97,31 @@ Continue Watching, history, subtitles, devices and scanner controls were finishe
 Verified: Go tests incl. `-race` (PIN flow, throttling, CSRF, settings validation, restore across a restart, scheduler),
 a headless-Chrome run of every settings tab, lock → wrong PIN → unlock, and `-reset-pin` on the real binary.
 
+## Desktop app ✅
+`desktop/`: a Tauri 2 app around the server, so a host PC only needs an installer.
+
+- **Sidecar**: the Go server is bundled as `enstream-server` and started with `-desktop`
+  (machine-readable ready line, next free port if 8080 is busy, exits when the app's pipe closes,
+  so it never outlives the app). A start-up screen shows progress, or the error with *Try again*.
+- **Window**: frameless with the family title bar; it shows the server's own page, so desktop,
+  phones and TVs share one interface. Navigation is limited to the bundled page and the local
+  server; other links open in the browser. A `server-page` capability grants that loopback origin
+  exactly the app's commands (folder picker, desktop settings, updates, window controls).
+- **Tray**: open, open in browser, copy the phone address, quit. Closing the window keeps serving.
+  Starts with the computer (hidden in the tray) from the first run; both are switches.
+- **Updates**: daily check of GitHub releases, verified SHA-256, in-place install (.deb via pkexec,
+  AppImage swap, NSIS silent). The server is stopped before its file is replaced.
+- **Packaging**: .deb depends on ffmpeg; Windows NSIS (per machine) adds a private-network firewall
+  rule; FFmpeg is downloaded on Windows by the server itself (`POST /system/ffmpeg/install`,
+  checksum-verified, no restart needed).
+- **Web additions**: first-run wizard (folders, optional PIN, QR code for phones), folder browser
+  (`GET /fs/dirs`, folders only), `GET /system/qr`, Settings → Desktop.
+- **CI**: `.github/workflows/build.yml` tests the server, builds .deb/AppImage/NSIS and the
+  stand-alone server binaries, and publishes a release for `v*` tags.
+
+Verified: Go tests; desktop app under Xvfb (wizard → folder → QR → home, Settings → Desktop over
+IPC, close to tray with the server still answering, autostart entry, server stops with the app);
+.deb installed with apt in a clean Ubuntu 22.04 container.
+
 ## Phase 6: Release ⬜
 README and docs (architecture, API, database, security, deployment, development), release builds.

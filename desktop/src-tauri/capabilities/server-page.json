@@ -1,0 +1,25 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "server-page",
+  "description": "ENStream's own page served by the bundled server on this computer. Only loopback addresses match; the window refuses to navigate anywhere else. It gets window controls, the native folder picker, desktop settings and updates; no filesystem, shell or HTTP plugin.",
+  "windows": ["main"],
+  "remote": { "urls": ["http://127.0.0.1:*", "http://127.0.0.1:*/*"] },
+  "permissions": [
+    "core:default",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-is-maximized",
+    "core:window:allow-close",
+    "core:window:allow-start-dragging",
+    "allow-pick-folder",
+    "allow-open-external",
+    "allow-open-app-folder",
+    "allow-desktop-settings",
+    "allow-set-desktop-setting",
+    "allow-app-info",
+    "allow-check-update",
+    "allow-install-update",
+    "allow-restart-app",
+    "allow-quit-app"
+  ]
+}

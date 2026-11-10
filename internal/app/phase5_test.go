@@ -247,7 +247,11 @@ func TestSchedulerAutoScanAndBackup(t *testing.T) {
 	if backups != 1 {
 		t.Fatalf("first automatic backup: %d", backups)
 	}
-	a.Settings.Update(func(c *config.Config) error { c.Scanner.AutoScan = true; c.Scanner.ScanIntervalMinutes = 60; return nil })
+	a.Settings.Update(func(c *config.Config) error {
+		c.Scanner.AutoScan = true
+		c.Scanner.ScanIntervalMinutes = 60
+		return nil
+	})
 	s.Step(ctx)
 	a.Scanner.Wait()
 	s.Step(ctx) // just scanned, so no second scan; backup is fresh
@@ -259,4 +263,38 @@ func TestSchedulerAutoScanAndBackup(t *testing.T) {
 		t.Fatalf("backups: %d", backups)
 	}
 	_ = time.Second
+}
+
+func TestFolderBrowserQRAndTools(t *testing.T) {
+	a, h := newTestApp(t)
+	c := &client{t: t, h: h, ip: "192.168.1.10"}
+	root := t.TempDir()
+	os.MkdirAll(root+"/Movies/Old", 0o755)
+	os.MkdirAll(root+"/.hidden", 0o755)
+	os.WriteFile(root+"/file.mp4", []byte("x"), 0o644)
+	w := c.do("GET", "/api/v1/fs/dirs?path="+root, "")
+	body := w.Body.String()
+	if w.Code != 200 || !strings.Contains(body, `"name":"Movies"`) || strings.Contains(body, "hidden") || strings.Contains(body, "file.mp4") {
+		t.Fatalf("dirs: %d %s", w.Code, body)
+	}
+	if w := c.do("GET", "/api/v1/fs/dirs?path=relative", ""); w.Code != 400 {
+		t.Fatalf("relative: %d", w.Code)
+	}
+	if w := c.do("GET", "/api/v1/fs/dirs", ""); w.Code != 200 || !strings.Contains(w.Body.String(), `"kind"`) {
+		t.Fatalf("places: %s", w.Body)
+	}
+	if w := c.do("GET", "/api/v1/system/qr?url=https://evil.example", ""); w.Code != 400 {
+		t.Fatal("QR for a foreign URL")
+	}
+	if len(a.Addresses) > 0 {
+		if w := c.do("GET", "/api/v1/system/qr?url="+a.Addresses[0].URL, ""); w.Code != 200 || w.Header().Get("Content-Type") != "image/png" {
+			t.Fatalf("QR: %d", w.Code)
+		}
+	}
+	if w := c.do("GET", "/api/v1/system/ffmpeg", ""); w.Code != 200 || !strings.Contains(w.Body.String(), `"can_install":false`) {
+		t.Fatalf("ffmpeg status: %s", w.Body)
+	}
+	if w := c.do("POST", "/api/v1/system/ffmpeg/install", ""); w.Code != 400 {
+		t.Fatalf("install on Linux: %d", w.Code)
+	}
 }

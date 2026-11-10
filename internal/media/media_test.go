@@ -1,6 +1,7 @@
 package media
 
 import (
+	"archive/zip"
 	"context"
 	"os"
 	"path/filepath"
@@ -123,5 +124,42 @@ func TestSRTToVTT(t *testing.T) {
 	}
 	if v := string(NormalizeVTT([]byte("00:01.000 --> 00:02.000\nx"))); v[:6] != "WEBVTT" {
 		t.Fatal(v)
+	}
+}
+
+func TestFFmpegArchiveExtraction(t *testing.T) {
+	dir := t.TempDir()
+	zp := filepath.Join(dir, "f.zip")
+	f, _ := os.Create(zp)
+	zw := zip.NewWriter(f)
+	for name, body := range map[string]string{
+		"ffmpeg-master/bin/ffmpeg.exe": "a", "ffmpeg-master/bin/avcodec.dll": "b", "ffmpeg-master/doc/readme.txt": "c",
+		"ffmpeg-master/bin/../../evil.exe": "d", "../bin/x.exe": "e",
+	} {
+		w, _ := zw.Create(name)
+		w.Write([]byte(body))
+	}
+	zw.Close()
+	f.Close()
+	out := filepath.Join(dir, "tools")
+	os.MkdirAll(out, 0o755)
+	n, err := ExtractBin(zp, out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, _ := os.ReadDir(out)
+	names := []string{}
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	if n != 3 || len(entries) != 3 {
+		t.Fatalf("extracted %d: %v", n, names)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "evil.exe")); err == nil {
+		t.Fatal("an entry escaped the folder")
+	}
+	sums := "abc  other.zip\n" + strings.Repeat("a", 64) + "  ffmpeg-master-latest-win64-gpl-shared.zip\n"
+	if ChecksumFor(sums, ffmpegAsset) != strings.Repeat("a", 64) || ChecksumFor(sums, "nope") != "" {
+		t.Fatal("checksum lookup")
 	}
 }

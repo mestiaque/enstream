@@ -1,0 +1,41 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ENStream",
+  "mainBinaryName": "enstream",
+  "version": "0.1.0",
+  "identifier": "com.mestiaque.enstream",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "publisher": "M. Estiaque Ahmed Khan",
+    "category": "Video",
+    "shortDescription": "Your personal cinema: stream your videos to every screen at home",
+    "longDescription": "ENStream turns this computer into a private streaming server. Pick your video folders and watch them on phones, TVs and other computers on your Wi-Fi, in any browser. No cloud, no account.",
+    "copyright": "© 2026 M. Estiaque Ahmed Khan · MIT License",
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
+    "externalBin": ["binaries/enstream-server"],
+    "linux": {
+      "deb": { "section": "video", "depends": ["ffmpeg"], "desktopTemplate": "enstream.desktop" },
+      "rpm": { "depends": ["ffmpeg"], "desktopTemplate": "enstream.desktop" }
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "perMachine",
+        "displayLanguageSelector": false,
+        "installerHooks": "windows/hooks.nsh"
+      },
+      "webviewInstallMode": { "type": "downloadBootstrapper" }
+    },
+    "homepage": "https://mestiaque.com"
+  }
+}

@@ -2,6 +2,7 @@ import { h, icon, fmtNumber, fmtSize, fmtAgo, fmtDate, swap, clear } from "../do
 import { get, send } from "../api.js";
 import { pageHead, errorState, emptyState, confirmDialog, toast, toastError, loading } from "../ui.js";
 import { pollScan, scanStatus, refreshCount } from "../shell.js";
+import { pickFolder } from "../folderpicker.js";
 
 const STATUS = { running: ["info", "Running"], completed: ["ok", "Completed"], cancelled: ["warn", "Cancelled"], failed: ["bad", "Failed"] };
 
@@ -27,7 +28,14 @@ export async function render() {
   const nameInput = h("input", { class: "input", id: "folder-name", placeholder: "Shown in the library", autocomplete: "off", maxlength: "80" });
   const addBtn = h("button", { class: "btn primary", type: "submit" }, icon("folder-plus", "sm"), "Add folder");
   const form = h("form", { class: "add-folder" },
-    h("div", { class: "field" }, h("label", { for: "folder-path", text: "Folder path on the server computer" }), pathInput),
+    h("div", { class: "field" }, h("label", { for: "folder-path", text: "Folder on the ENStream computer" }),
+      h("div", { class: "path-input" }, pathInput, h("button", { class: "btn", type: "button", onclick: async () => {
+        const p = await pickFolder();
+        if (p) {
+          pathInput.value = p;
+          if (!nameInput.value) nameInput.placeholder = p.split(/[\\/]/).filter(Boolean).pop() || "Shown in the library";
+        }
+      } }, icon("folder-open", "sm"), "Browse…"))),
     h("div", { class: "field" }, h("label", { for: "folder-name", text: "Name (optional)" }), nameInput),
     addBtn);
   form.addEventListener("submit", async (e) => {
@@ -160,7 +168,7 @@ export async function render() {
   const el = h("div", null,
     pageHead("Folders & scan", "ENStream reads videos from these folders. Files are never moved, renamed or deleted."),
     h("section", { class: "panel" }, h("div", { class: "panel-head" }, h("h2", { text: "Add a folder" })), h("div", { class: "panel-body" }, form,
-      h("p", { class: "field hint section", text: "Type the full path as it is on the computer running ENStream (USB drives and network shares work while they are connected)." }))),
+      h("p", { class: "hint section", text: "Browse, or type the full path. USB drives and network shares work while they are connected." }))),
     h("section", { class: "section" }, scanBox),
     h("section", { class: "section" }, h("div", { class: "section-head" }, h("h2", null, icon("folder"), "Library folders")), listBox),
     jobsBox);

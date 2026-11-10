@@ -11,6 +11,6 @@ mkdir -p dist
 for target in linux/amd64 linux/arm64 windows/amd64; do
   os="${target%/*}"; arch="${target#*/}"; ext=""; [ "$os" = windows ] && ext=".exe"
   echo "building ${os}/${arch}"
-  CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" "${GO[@]}" build -trimpath -ldflags "$LDFLAGS" -o "dist/enstream-${os}-${arch}${ext}" ./cmd/enstream
+  CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" "${GO[@]}" build -trimpath -ldflags "$LDFLAGS" -o "dist/enstream-server-${os}-${arch}${ext}" ./cmd/enstream
 done
 ls -la dist

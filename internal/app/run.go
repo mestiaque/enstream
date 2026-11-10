@@ -2,13 +2,16 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/netip"
 
 	"github.com/go-chi/chi/v5"
 
+	"enstream/internal/config"
 	"enstream/internal/handlers"
 	"enstream/internal/jobs"
+	"enstream/internal/media"
 	"enstream/internal/network"
 	"enstream/internal/playback"
 	"enstream/internal/security"
@@ -59,9 +62,10 @@ func (a *App) Handler() (http.Handler, error) {
 	videos := &handlers.Videos{Store: a.Store, Paths: a.Paths, FFmpeg: a.FFmpeg, Log: a.Log}
 	stream := &streaming.Handler{Store: a.Store, Log: a.Log}
 	play := &handlers.Playback{Store: a.Store, Service: &playback.Service{Store: a.Store}, Scanner: a.Scanner, Log: a.Log}
-	settings := &handlers.Settings{Live: a.Settings, Auth: a.Auth, Log: a.Log}
+	settings := &handlers.Settings{Live: a.Settings, Auth: a.Auth, Log: a.Log, Server: func() config.Server { return a.Config.Server }}
 	authH := &handlers.Auth{Service: a.Auth, Log: a.Log}
 	backups := &handlers.Backups{Manager: a.Backups, Log: a.Log}
+	tools := &handlers.Tools{FFmpeg: a.FFmpeg, FFprobe: a.FFprobe, Log: a.Log, Install: a.InstallFFmpeg}
 	front, err := server.Frontend(web.Files, Version)
 	if err != nil {
 		return nil, err
@@ -76,6 +80,10 @@ func (a *App) Handler() (http.Handler, error) {
 		API: func(r chi.Router) {
 			r.Get("/health", sys.Health)
 			r.Get("/system/info", sys.Info)
+			r.Get("/system/ffmpeg", tools.Status)
+			r.Get("/system/qr", sys.QR)
+			r.Get("/fs/dirs", handlers.FS{}.Dirs)
+			r.Post("/system/ffmpeg/install", tools.InstallFFmpeg)
 
 			r.Get("/folders", folders.List)
 			r.Post("/folders", folders.Add)
@@ -130,4 +138,18 @@ func (a *App) Handler() (http.Handler, error) {
 		},
 		Frontend: front,
 	}), nil
+}
+
+// InstallFFmpeg downloads FFmpeg into the tools folder and switches to it without a restart.
+func (a *App) InstallFFmpeg(ctx context.Context, progress media.Progress) error {
+	if err := media.InstallFFmpeg(ctx, a.Paths.Tools, progress); err != nil {
+		return err
+	}
+	cfg := a.Settings.Get()
+	a.FFmpeg.Replace(media.FindTool(ctx, "ffmpeg", cfg.Media.FFmpegPath, a.Paths.Tools))
+	a.FFprobe.Replace(media.FindTool(ctx, "ffprobe", cfg.Media.FFprobePath, a.Paths.Tools))
+	if !a.FFmpeg.Available() || !a.FFprobe.Available() {
+		return fmt.Errorf("FFmpeg was downloaded but does not run: %s", a.FFmpeg.Err()+a.FFprobe.Err())
+	}
+	return nil
 }

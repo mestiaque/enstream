@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ENStream</title>
+    <link rel="stylesheet" href="splash.css" />
+  </head>
+  <body>
+    <header class="titlebar" id="titlebar">
+      <img src="enstream-icon.svg" alt="" width="20" height="20" draggable="false" />
+      <span class="name">ENStream</span>
+      <span class="space"></span>
+      <button class="win" id="min" type="button" aria-label="Minimize" title="Minimize">&#8211;</button>
+      <button class="win close" id="close" type="button" aria-label="Close" title="Close">&#10005;</button>
+    </header>
+    <main>
+      <img class="logo" src="enstream-icon.svg" alt="" width="84" height="84" />
+      <h1>ENStream</h1>
+      <p class="muted">Your Personal Cinema</p>
+      <div id="starting" class="status">
+        <span class="spinner" aria-hidden="true"></span>
+        <span>Starting the server…</span>
+      </div>
+      <div id="failed" class="status failed" hidden>
+        <strong>ENStream could not start</strong>
+        <p id="error" class="error"></p>
+        <div class="actions">
+          <button id="retry" class="btn primary" type="button">Try again</button>
+          <button id="logs" class="btn" type="button">Open log folder</button>
+        </div>
+      </div>
+    </main>
+    <script src="splash.js"></script>
+  </body>
+</html>

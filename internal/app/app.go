@@ -32,5 +32,6 @@ type App struct {
 	Store     *repo.Store
 	Scanner   *jobs.Scanner
 	Auth      *auth.Service
+	Desktop   bool // started by the desktop app (see Options.Desktop)
 	Backups   *backup.Manager
 }

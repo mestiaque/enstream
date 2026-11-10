@@ -458,3 +458,53 @@ body.signin .shell { display: block; }
 .backup-row .actions { display: flex; gap: 2px; }
 .backup-row .icon-wrap { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--raised); color: var(--muted); }
 .field > .btn { align-self: flex-start; }
+
+/* ------------------------------------------------------------------ folder picker */
+dialog.modal.picker { width: min(560px, calc(100vw - 32px)); }
+.picker-path { margin-top: 14px; padding: 8px 10px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); color: var(--muted); overflow-wrap: anywhere; }
+.picker-list { margin-top: 8px; height: min(46vh, 380px); overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; padding: 4px; }
+.picker-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: 8px; background: none; text-align: left; }
+.picker-row:hover, .picker-row:focus-visible { background: var(--hover); }
+.picker-row span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picker-row .icon:first-child { color: var(--warning); }
+.picker-row.up { color: var(--muted); }
+.picker-row.up .icon:first-child { color: var(--muted); }
+.picker-row .icon:last-child { color: var(--faint); }
+.picker-empty { padding: 20px; text-align: center; }
+.path-input { display: flex; gap: 8px; }
+.path-input .input { flex: 1; }
+
+/* ------------------------------------------------------------------ desktop app */
+.titlebar { position: fixed; top: 0; left: 0; right: 0; z-index: 60; height: 40px; display: flex; align-items: center; gap: 9px; padding: 0 10px 0 14px; background: var(--panel); border-bottom: 1px solid var(--line); user-select: none; -webkit-user-select: none; }
+.titlebar-name { font-weight: 600; font-size: 13.5px; letter-spacing: -0.01em; }
+.titlebar-space { flex: 1; align-self: stretch; }
+.win-controls { display: flex; align-items: center; gap: 8px; margin-left: 6px; }
+.win-btn { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%; background: var(--raised); color: var(--muted); transition: background 0.15s, color 0.15s; }
+.win-btn .icon { width: 13px; height: 13px; }
+.win-btn:hover { background: var(--line); color: var(--fg); }
+.win-btn.close:hover { background: var(--danger); color: #fff; }
+.update-pill { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 11px; border: 0; border-radius: 999px; background: var(--grad); color: #fff; font-size: 12px; font-weight: 600; }
+body.desktop { --titlebar: 40px; padding-top: var(--titlebar); }
+body.desktop .sidebar { top: var(--titlebar); height: calc(100vh - var(--titlebar)); }
+body.desktop .topbar { top: var(--titlebar); }
+body.desktop .shell { min-height: calc(100vh - var(--titlebar)); }
+body.desktop .player { top: var(--titlebar); }
+body.desktop.signin .titlebar, body.desktop.watching .titlebar { background: #000; border-color: #111; }
+body.desktop .signin { min-height: calc(100vh - var(--titlebar) - 80px); }
+.update-notes { white-space: pre-wrap; max-height: 40vh; overflow-y: auto; }
+
+/* ------------------------------------------------------------------ welcome */
+.welcome { max-width: 760px; margin: 2vh auto 0; }
+.steps { display: flex; gap: 8px; margin: 0 0 18px; }
+.steps span { flex: 1; height: 4px; border-radius: 999px; background: var(--line); }
+.steps span.on { background: var(--grad); }
+.welcome .panel-body { padding: 26px; }
+.welcome h1 { font-size: 26px; }
+.welcome .lead { color: var(--muted); margin-top: 6px; max-width: 560px; }
+.welcome-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 24px; flex-wrap: wrap; }
+.suggest { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.chosen { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+.chosen .addr a, .chosen .addr span.mono { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qr-wrap { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; margin-top: 18px; }
+.qr { width: 180px; height: 180px; border-radius: 12px; background: #fff; padding: 8px; image-rendering: pixelated; }
+.qr-wrap > div { flex: 1; min-width: 220px; }

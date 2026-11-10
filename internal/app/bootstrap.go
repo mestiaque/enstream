@@ -26,6 +26,7 @@ type Options struct {
 	Port     int    // overrides config when > 0
 	Debug    bool
 	ResetPIN bool // remove the PIN at start-up (forgotten PIN)
+	Desktop  bool // run by the desktop app: next free port if busy, machine-readable ready line
 }
 
 // Bootstrap loads configuration, opens the database, finds FFmpeg and the LAN addresses.
@@ -64,12 +65,12 @@ func Bootstrap(ctx context.Context, o Options) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	a := &App{Config: cfg, Settings: config.NewLive(cfg, fileServer), Paths: paths, DB: db, Log: log, StartedAt: time.Now()}
-	a.FFmpeg = media.FindTool(ctx, "ffmpeg", cfg.Media.FFmpegPath)
-	a.FFprobe = media.FindTool(ctx, "ffprobe", cfg.Media.FFprobePath)
+	a := &App{Desktop: o.Desktop, Config: cfg, Settings: config.NewLive(cfg, fileServer), Paths: paths, DB: db, Log: log, StartedAt: time.Now()}
+	a.FFmpeg = media.FindTool(ctx, "ffmpeg", cfg.Media.FFmpegPath, paths.Tools)
+	a.FFprobe = media.FindTool(ctx, "ffprobe", cfg.Media.FFprobePath, paths.Tools)
 	for _, t := range []*media.Tool{a.FFmpeg, a.FFprobe} {
 		if !t.Available() {
-			log.Warn("dependency missing", "tool", t.Name, "error", t.Error)
+			log.Warn("dependency missing", "tool", t.Name, "error", t.Err())
 		}
 	}
 	a.Store = repo.New(db)

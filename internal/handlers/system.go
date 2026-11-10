@@ -2,6 +2,8 @@
 package handlers
 
 import (
+	qrcode "github.com/skip2/go-qrcode"
+
 	"context"
 	"database/sql"
 	"net/http"
@@ -43,7 +45,7 @@ type toolInfo struct {
 
 func tool(t *media.Tool) toolInfo {
 	// The executable path stays on the server: it is an internal detail.
-	return toolInfo{Available: t.Available(), Version: t.Version, Message: t.Error}
+	return toolInfo{Available: t.Available(), Version: t.Version(), Message: t.Err()}
 }
 
 // Info: version, uptime, dependencies and the URLs to open on other devices.
@@ -62,4 +64,27 @@ func (s *System) Info(w http.ResponseWriter, r *http.Request) {
 		"ffmpeg":         tool(s.FFmpeg),
 		"ffprobe":        tool(s.FFprobe),
 	})
+}
+
+// QR: a PNG QR code of one of this server's own addresses (for phones to scan).
+func (s *System) QR(w http.ResponseWriter, r *http.Request) {
+	u := r.URL.Query().Get("url")
+	ok := false
+	for _, a := range s.Addresses(false) {
+		if a.URL == u {
+			ok = true
+		}
+	}
+	if !ok {
+		server.Fail(w, http.StatusBadRequest, "INVALID_URL", "Only this server's own addresses can be shown as a QR code")
+		return
+	}
+	png, err := qrcode.Encode(u, qrcode.Medium, 320)
+	if err != nil {
+		server.Fail(w, http.StatusInternalServerError, "QR_FAILED", "Could not make the QR code")
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	w.Write(png)
 }

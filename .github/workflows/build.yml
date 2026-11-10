@@ -1,0 +1,130 @@
+# Tests ENStream and builds the desktop app (.deb, AppImage, Windows installer) plus the
+# stand-alone server for headless machines. Pushing a tag like v0.1.0 publishes a release.
+name: build
+
+on:
+  push:
+    tags: ["v*"]
+    branches: [master, main]
+    paths-ignore: ["docs/**", "**.md"]
+  pull_request:
+    paths-ignore: ["docs/**", "**.md"]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  server:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: FFmpeg for the integration tests
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - run: go vet ./...
+      - run: go test -race -count=1 ./...
+      - name: Stand-alone server binaries
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        run: ./scripts/build.sh "${GITHUB_REF_NAME#v}"
+      - uses: actions/upload-artifact@v4
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        with:
+          name: server
+          path: dist/enstream-server-*
+
+  desktop:
+    needs: server
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            sidecar: linux
+            bundles: deb,appimage
+          - os: windows-latest
+            sidecar: windows
+            bundles: nsis
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+        working-directory: desktop
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - uses: actions/checkout@v4
+      - name: Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          APT="-o Acquire::Retries=3 -o Acquire::http::Timeout=30"
+          for i in 1 2 3; do
+            timeout 300 sudo apt-get $APT update &&
+            timeout 900 sudo -E apt-get $APT install -y pkg-config libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev \
+              libayatana-appindicator3-dev libssl-dev libxdo-dev file patchelf && exit 0
+            echo "apt attempt $i failed, retrying…"; sleep 15
+          done
+          exit 1
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: desktop/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: desktop/pnpm-lock.yaml
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri -> ../target
+      - run: pnpm install --frozen-lockfile
+      - name: Bundled server
+        run: ./scripts/build-sidecar.sh ${{ matrix.sidecar }}
+      - run: cargo test --manifest-path src-tauri/Cargo.toml
+        env:
+          CARGO_TARGET_DIR: target
+      - name: Bundle
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        run: pnpm tauri build --bundles ${{ matrix.bundles }}
+        env:
+          CARGO_TARGET_DIR: target
+      - uses: actions/upload-artifact@v4
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        with:
+          name: desktop-${{ matrix.os }}
+          path: |
+            desktop/target/release/bundle/deb/*.deb
+            desktop/target/release/bundle/appimage/*.AppImage
+            desktop/target/release/bundle/nsis/*-setup.exe
+
+  release:
+    name: Publish release
+    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/v') }}
+    needs: [server, desktop]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - name: Collect files
+        run: |
+          mkdir -p files
+          find out -type f \( -name '*.deb' -o -name '*.AppImage' -o -name '*-setup.exe' -o -name 'enstream-server-*' \) -exec cp {} files/ \;
+          ls -l files
+          test -n "$(ls files)"
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: files/*
+          generate_release_notes: true

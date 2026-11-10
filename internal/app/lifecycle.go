@@ -13,10 +13,9 @@ import (
 // Serve runs the HTTP server until ctx is cancelled (Ctrl+C), then shuts down gracefully:
 // in-flight requests get up to 10 s, background work is stopped, the database is closed.
 func (a *App) Serve(ctx context.Context, handler http.Handler, onStop func()) error {
-	addr := net.JoinHostPort(a.Config.Server.Host, fmt.Sprint(a.Config.Server.Port))
-	ln, err := net.Listen("tcp", addr)
+	ln, err := a.listen()
 	if err != nil {
-		return fmt.Errorf("cannot listen on %s (is another program using port %d?): %w", addr, a.Config.Server.Port, err)
+		return err
 	}
 	srv := &http.Server{
 		Handler:           handler,
@@ -24,7 +23,12 @@ func (a *App) Serve(ctx context.Context, handler http.Handler, onStop func()) er
 		IdleTimeout:       120 * time.Second,
 		// No WriteTimeout: a video stream legitimately lasts hours.
 	}
-	fmt.Println(a.Banner())
+	if a.Desktop {
+		// The desktop app waits for this line, then opens the window on this address.
+		fmt.Printf("ENSTREAM_READY http://127.0.0.1:%d\n", a.Config.Server.Port)
+	} else {
+		fmt.Println(a.Banner())
+	}
 	errc := make(chan error, 1)
 	go func() { errc <- srv.Serve(ln) }()
 
@@ -43,6 +47,33 @@ func (a *App) Serve(ctx context.Context, handler http.Handler, onStop func()) er
 		onStop()
 	}
 	return a.DB.Close()
+}
+
+// listen opens the configured port. In the desktop app a busy port is not fatal: the next
+// free one (up to 20 further) is used and the network addresses follow it.
+func (a *App) listen() (net.Listener, error) {
+	port := a.Config.Server.Port
+	tries := 1
+	if a.Desktop {
+		tries = 21
+	}
+	var firstErr error
+	for i := 0; i < tries && port+i <= 65535; i++ {
+		addr := net.JoinHostPort(a.Config.Server.Host, fmt.Sprint(port+i))
+		ln, err := net.Listen("tcp", addr)
+		if err == nil {
+			if i > 0 {
+				a.Log.Warn("port busy; using another", "wanted", port, "using", port+i)
+				a.Config.Server.Port = port + i
+				a.RefreshAddresses()
+			}
+			return ln, nil
+		}
+		if firstErr == nil {
+			firstErr = err
+		}
+	}
+	return nil, fmt.Errorf("cannot listen on port %d (is another program using it?): %w", port, firstErr)
 }
 
 // Banner is the startup summary printed to the console.
