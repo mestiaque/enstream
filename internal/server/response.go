@@ -43,7 +43,9 @@ func WriteJSON(w http.ResponseWriter, status int, v Envelope) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-func OK(w http.ResponseWriter, data any) { WriteJSON(w, http.StatusOK, Envelope{Success: true, Data: data}) }
+func OK(w http.ResponseWriter, data any) {
+	WriteJSON(w, http.StatusOK, Envelope{Success: true, Data: data})
+}
 
 func OKPage(w http.ResponseWriter, data any, p *Pagination) {
 	WriteJSON(w, http.StatusOK, Envelope{Success: true, Data: data, Pagination: p})

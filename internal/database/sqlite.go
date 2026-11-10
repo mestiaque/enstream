@@ -126,3 +126,12 @@ func Backup(ctx context.Context, db *sql.DB, dest string) error {
 	_, err := db.ExecContext(ctx, `VACUUM INTO ?`, dest)
 	return err
 }
+
+// LatestVersion is the newest migration this build knows.
+func LatestVersion() int {
+	ms, err := loadMigrations()
+	if err != nil || len(ms) == 0 {
+		return 0
+	}
+	return ms[len(ms)-1].version
+}

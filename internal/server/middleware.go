@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"runtime/debug"
 	"time"
 )
@@ -140,4 +141,27 @@ func MaxBody(n int64) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// SameOrigin refuses state-changing requests sent by other websites (CSRF). Browsers add
+// Origin (or Sec-Fetch-Site) to such requests; tools like curl send neither and pass.
+func SameOrigin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet, http.MethodHead, http.MethodOptions:
+			next.ServeHTTP(w, r)
+			return
+		}
+		if o := r.Header.Get("Origin"); o != "" {
+			u, err := url.Parse(o)
+			if err != nil || u.Host != r.Host {
+				Fail(w, http.StatusForbidden, "CROSS_ORIGIN", "Requests from other websites are not allowed")
+				return
+			}
+		} else if r.Header.Get("Sec-Fetch-Site") == "cross-site" {
+			Fail(w, http.StatusForbidden, "CROSS_ORIGIN", "Requests from other websites are not allowed")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }

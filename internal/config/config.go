@@ -32,16 +32,22 @@ type Thumbnail struct {
 }
 
 type Media struct {
-	Extensions []string `json:"extensions"`
-	FFmpegPath string   `json:"ffmpeg_path"`
-	FFprobePath string  `json:"ffprobe_path"`
+	Extensions  []string `json:"extensions"`
+	FFmpegPath  string   `json:"ffmpeg_path"`
+	FFprobePath string   `json:"ffprobe_path"`
 }
 
+// Security: the optional PIN lives in the database (Settings → Security), not in this file.
 type Security struct {
-	AuthenticationEnabled bool `json:"authentication_enabled"`
 	// CIDR ranges allowed to connect. Empty = loopback plus the private ranges
 	// (RFC 1918, link-local, IPv6 ULA); see DefaultAllowedNetworks.
 	AllowedNetworks []string `json:"allowed_networks"`
+}
+
+// Backup: automatic daily database copies in the backups folder.
+type Backup struct {
+	Auto bool `json:"auto"`
+	Keep int  `json:"keep"` // automatic backups to keep
 }
 
 type Config struct {
@@ -50,6 +56,7 @@ type Config struct {
 	Scanner   Scanner   `json:"scanner"`
 	Thumbnail Thumbnail `json:"thumbnail"`
 	Security  Security  `json:"security"`
+	Backup    Backup    `json:"backup"`
 
 	// Not stored: where the file lives.
 	path string
@@ -77,6 +84,7 @@ func Default() Config {
 		Scanner:   Scanner{WorkerCount: 3, ScanIntervalMinutes: 60, ExcludedDirectories: []string{}},
 		Thumbnail: Thumbnail{Width: 480, Quality: 80},
 		Security:  Security{AllowedNetworks: []string{}},
+		Backup:    Backup{Auto: true, Keep: 7},
 	}
 }
 
@@ -101,6 +109,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Thumbnail.Quality < 1 || c.Thumbnail.Quality > 100 {
 		return fmt.Errorf("thumbnail.quality must be between 1 and 100 (got %d)", c.Thumbnail.Quality)
+	}
+	if c.Backup.Keep < 1 || c.Backup.Keep > 60 {
+		return fmt.Errorf("backup.keep must be between 1 and 60 (got %d)", c.Backup.Keep)
 	}
 	if len(c.Media.Extensions) == 0 {
 		return errors.New("media.extensions cannot be empty")

@@ -13,7 +13,7 @@ func TestOpenMigratesAndEnforcesForeignKeys(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v, err := SchemaVersion(ctx, db); err != nil || v != 1 {
+	if v, err := SchemaVersion(ctx, db); err != nil || v != 2 {
 		t.Fatalf("schema version %d %v", v, err)
 	}
 	var mode string
@@ -51,7 +51,7 @@ func TestOpenMigratesAndEnforcesForeignKeys(t *testing.T) {
 	}
 	defer db.Close()
 	db.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n)
-	if n != 1 {
+	if n != 2 {
 		t.Fatalf("migrations recorded %d times", n)
 	}
 	if err := Backup(ctx, db, filepath.Join(t.TempDir(), "backup.db")); err != nil {

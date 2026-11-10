@@ -92,8 +92,8 @@ func TestRanges(t *testing.T) {
 	}{
 		{"bytes=0-0", 0, 0},
 		{"bytes=100-199", 100, 199},
-		{fmt.Sprintf("bytes=%d-", n-10), n - 10, n - 1},          // open-ended
-		{"bytes=-500", n - 500, n - 1},                           // suffix
+		{fmt.Sprintf("bytes=%d-", n-10), n - 10, n - 1},         // open-ended
+		{"bytes=-500", n - 500, n - 1},                          // suffix
 		{fmt.Sprintf("bytes=%d-%d", n-5, n+1000), n - 5, n - 1}, // end clamped
 	}
 	for _, c := range cases {

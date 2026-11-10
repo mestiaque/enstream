@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"enstream/internal/handlers"
+	"enstream/internal/jobs"
 	"enstream/internal/network"
 	"enstream/internal/playback"
 	"enstream/internal/security"
@@ -27,6 +28,18 @@ func Run(ctx context.Context, o Options) error {
 		a.DB.Close()
 		return err
 	}
+	sched := &jobs.Scheduler{
+		Scanner: a.Scanner, Store: a.Store, Settings: a.Settings, Log: a.Log,
+		LastBackup: a.Backups.LastAuto,
+		Backup: func(ctx context.Context) error {
+			if _, err := a.Backups.Create(ctx, "auto"); err != nil {
+				return err
+			}
+			return a.Backups.Prune(a.Settings.Get().Backup.Keep)
+		},
+		Daily: func(ctx context.Context) { _ = a.Store.PurgeExpiredSessions(ctx) },
+	}
+	go sched.Run(ctx)
 	return a.Serve(ctx, h, a.Scanner.Shutdown)
 }
 
@@ -46,6 +59,9 @@ func (a *App) Handler() (http.Handler, error) {
 	videos := &handlers.Videos{Store: a.Store, Paths: a.Paths, FFmpeg: a.FFmpeg, Log: a.Log}
 	stream := &streaming.Handler{Store: a.Store, Log: a.Log}
 	play := &handlers.Playback{Store: a.Store, Service: &playback.Service{Store: a.Store}, Scanner: a.Scanner, Log: a.Log}
+	settings := &handlers.Settings{Live: a.Settings, Auth: a.Auth, Log: a.Log}
+	authH := &handlers.Auth{Service: a.Auth, Log: a.Log}
+	backups := &handlers.Backups{Manager: a.Backups, Log: a.Log}
 	front, err := server.Frontend(web.Files, Version)
 	if err != nil {
 		return nil, err
@@ -56,6 +72,7 @@ func (a *App) Handler() (http.Handler, error) {
 	return server.NewRouter(server.RouterOptions{
 		Log:   a.Log,
 		Guard: guard.Middleware,
+		Auth:  a.Auth.Middleware,
 		API: func(r chi.Router) {
 			r.Get("/health", sys.Health)
 			r.Get("/system/info", sys.Info)
@@ -91,6 +108,25 @@ func (a *App) Handler() (http.Handler, error) {
 			r.Get("/devices", play.Devices)
 			r.Put("/devices/current", play.NameDevice)
 			r.Delete("/devices/{id}", play.DeleteDevice)
+
+			r.Get("/settings", settings.Get)
+			r.Put("/settings", settings.Update)
+
+			r.Get("/auth/status", authH.Status)
+			r.Post("/auth/login", authH.Login)
+			r.Post("/auth/logout", authH.Logout)
+			r.Put("/auth/pin", authH.SetPIN)
+			r.Post("/auth/pin/disable", authH.DisablePIN)
+			r.Get("/auth/sessions", authH.Sessions)
+			r.Delete("/auth/sessions/{id}", authH.DeleteSession)
+			r.Post("/auth/sessions/sign-out-others", authH.SignOutOthers)
+
+			r.Get("/backups", backups.List)
+			r.Post("/backups", backups.Create)
+			r.Delete("/backups/restore", backups.CancelRestore)
+			r.Get("/backups/{name}", backups.Download)
+			r.Delete("/backups/{name}", backups.Delete)
+			r.Post("/backups/{name}/restore", backups.Restore)
 		},
 		Frontend: front,
 	}), nil

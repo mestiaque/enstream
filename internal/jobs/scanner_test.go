@@ -61,7 +61,7 @@ func newEnv(t *testing.T, ffmpeg, ffprobe *media.Tool) *env {
 	cfg := config.Default()
 	store := repo.New(db)
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return &env{store: store, sc: NewScanner(store, &cfg, paths, ffmpeg, ffprobe, log), media: t.TempDir(), paths: paths}
+	return &env{store: store, sc: NewScanner(store, config.NewLive(&cfg, cfg.Server), paths, ffmpeg, ffprobe, log), media: t.TempDir(), paths: paths}
 }
 
 func (e *env) scan(t *testing.T, req ScanRequest) repo.ScanJob {

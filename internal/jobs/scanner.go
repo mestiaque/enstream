@@ -30,7 +30,7 @@ type ScanRequest struct {
 // the same folder); inside a scan at most WorkerCount files are probed at once.
 type Scanner struct {
 	store   *repo.Store
-	cfg     *config.Config
+	cfg     *config.Live
 	paths   config.Paths
 	ffmpeg  *media.Tool
 	ffprobe *media.Tool
@@ -41,17 +41,18 @@ type Scanner struct {
 	done    chan struct{} // closed when the current run ends
 }
 
-func NewScanner(store *repo.Store, cfg *config.Config, paths config.Paths, ffmpeg, ffprobe *media.Tool, log *slog.Logger) *Scanner {
+func NewScanner(store *repo.Store, cfg *config.Live, paths config.Paths, ffmpeg, ffprobe *media.Tool, log *slog.Logger) *Scanner {
 	return &Scanner{store: store, cfg: cfg, paths: paths, ffmpeg: ffmpeg, ffprobe: ffprobe, log: log}
 }
 
 type run struct {
+	cfg    config.Config // snapshot: settings changed mid-scan apply to the next scan
 	job    repo.ScanJob
 	cancel context.CancelFunc
 	// Counters updated by workers.
 	total, processed, skipped, failed, added, updated, removed atomic.Int64
-	mu                                                        sync.Mutex
-	currentFile                                               string
+	mu                                                         sync.Mutex
+	currentFile                                                string
 }
 
 func (r *run) snapshot() repo.ScanJob {
@@ -89,7 +90,7 @@ func (s *Scanner) Start(req ScanRequest) (int64, error) {
 		return 0, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	r := &run{job: repo.ScanJob{ID: id, FolderID: folderID, Status: "running", StartedAt: time.Now().Unix()}, cancel: cancel}
+	r := &run{cfg: s.cfg.Get(), job: repo.ScanJob{ID: id, FolderID: folderID, Status: "running", StartedAt: time.Now().Unix()}, cancel: cancel}
 	s.current, s.done = r, make(chan struct{})
 	go s.execute(ctx, r, req)
 	return id, nil
@@ -214,7 +215,7 @@ func (s *Scanner) scanFolder(ctx context.Context, r *run, f repo.Folder, retryOn
 	}
 	s.log.Info("scan started", "folder", f.Name, "job", r.job.ID)
 	found, walkErrs := media.Walk(ctx, f.Path, media.WalkOptions{
-		Extensions: s.cfg.ExtensionSet(), IncludeHidden: s.cfg.Scanner.IncludeHidden, Excluded: s.cfg.Scanner.ExcludedDirectories,
+		Extensions: r.cfg.ExtensionSet(), IncludeHidden: r.cfg.Scanner.IncludeHidden, Excluded: r.cfg.Scanner.ExcludedDirectories,
 	})
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -279,7 +280,7 @@ func (s *Scanner) scanFolder(ctx context.Context, r *run, f repo.Folder, retryOn
 	// Bounded worker pool: at most WorkerCount FFprobe/FFmpeg processes at a time.
 	queue := make(chan workItem)
 	var wg sync.WaitGroup
-	for i := 0; i < s.cfg.Scanner.WorkerCount; i++ {
+	for i := 0; i < r.cfg.Scanner.WorkerCount; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -374,7 +375,7 @@ func (s *Scanner) process(ctx context.Context, r *run, f repo.Folder, it workIte
 	// Thumbnail named after the stable id, never after the file name.
 	if s.ffmpeg.Available() && !probeFailed {
 		dest := filepath.Join(s.paths.Thumbnails, fmt.Sprintf("%d.webp", id))
-		err := media.Thumbnail(ctx, s.ffmpeg, ff.Path, dest, meta.Duration, media.ThumbnailOptions{Width: s.cfg.Thumbnail.Width, Quality: s.cfg.Thumbnail.Quality})
+		err := media.Thumbnail(ctx, s.ffmpeg, ff.Path, dest, meta.Duration, media.ThumbnailOptions{Width: r.cfg.Thumbnail.Width, Quality: r.cfg.Thumbnail.Quality})
 		if ctx.Err() != nil {
 			return
 		}

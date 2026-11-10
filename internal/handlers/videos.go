@@ -17,7 +17,7 @@ import (
 )
 
 type Videos struct {
-	Store *repo.Store
+	Store  *repo.Store
 	Paths  config.Paths
 	FFmpeg *media.Tool
 	Log    *slog.Logger

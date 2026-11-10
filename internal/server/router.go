@@ -11,6 +11,7 @@ import (
 type RouterOptions struct {
 	Log      *slog.Logger
 	Guard    func(http.Handler) http.Handler // network access control, applied to everything
+	Auth     func(http.Handler) http.Handler // optional PIN check for the API
 	API      func(r chi.Router)              // mounted under /api/v1
 	Frontend http.Handler                    // embedded UI
 }
@@ -23,7 +24,10 @@ func NewRouter(o RouterOptions) http.Handler {
 	}
 	r.Use(SecurityHeaders)
 	r.Route("/api/v1", func(api chi.Router) {
-		api.Use(MaxBody(1 << 20))
+		api.Use(MaxBody(1<<20), SameOrigin)
+		if o.Auth != nil {
+			api.Use(o.Auth)
+		}
 		api.NotFound(func(w http.ResponseWriter, _ *http.Request) {
 			Fail(w, http.StatusNotFound, "NOT_FOUND", "No such API endpoint")
 		})

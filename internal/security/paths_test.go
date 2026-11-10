@@ -35,11 +35,11 @@ func TestWithinAndResolveInside(t *testing.T) {
 	sep := string(filepath.Separator)
 	root := filepath.Join(sep, "media", "videos")
 	for path, want := range map[string]bool{
-		root:                                         true,
-		filepath.Join(root, "a", "b.mp4"):             true,
-		filepath.Join(sep, "media", "videos2", "x"):   false, // prefix trick
-		filepath.Join(root, "..", "secret"):           false,
-		filepath.Join(sep, "etc", "passwd"):           false,
+		root:                              true,
+		filepath.Join(root, "a", "b.mp4"): true,
+		filepath.Join(sep, "media", "videos2", "x"): false, // prefix trick
+		filepath.Join(root, "..", "secret"):         false,
+		filepath.Join(sep, "etc", "passwd"):         false,
 	} {
 		if Within(root, filepath.Clean(path)) != want {
 			t.Errorf("Within(%s) != %v", path, want)

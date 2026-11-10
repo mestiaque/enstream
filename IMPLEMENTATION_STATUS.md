@@ -70,10 +70,32 @@ Verified: Go tests (incl. `-race`), plus a headless-Chrome run against the real 
 subtitles, speed, seek, pause-saves-progress, Esc, search, list view, 4K filter, next-up overlay, mobile menu, no stray
 `null`/`undefined` text on any page, no console errors.
 
-## Phase 5: Advanced ⬜
-Done early in phase 4: Continue Watching, history, subtitles, devices, scanner controls.
-Remaining: settings API + UI (scan interval, extensions, workers), automatic periodic scans, optional PIN
-authentication, database backup/restore from the UI.
+## Phase 5: Advanced ✅
+Continue Watching, history, subtitles, devices and scanner controls were finished in phase 4. Added:
+
+- **Live settings** (`config.Live`): `GET/PUT /settings` changes scanning (auto scan, interval, workers, hidden files,
+  excluded folder names), video formats, thumbnails and backups without a restart. Updates are partial, validated as a
+  whole and saved atomically; a rejected update changes nothing. `-host`/`-port` overrides are never written to
+  config.json. Server address and allowed networks stay file-only (shown read-only). A running scan keeps the
+  settings it started with.
+- **Scheduler** (`jobs.Scheduler`, checks once a minute): automatic scans counted from the end of the last scan (never
+  while one runs, only when folders exist), a daily automatic backup, daily purge of expired sessions.
+- **Optional PIN** (`internal/auth`): PBKDF2-HMAC-SHA256 (600 000 iterations, random salt, constant-time compare),
+  stored in the database. Sessions: random 256-bit token in an HttpOnly, SameSite=Strict cookie, only its SHA-256 is
+  stored, 30-day sliding expiry. Wrong PINs: 5 free attempts per IP, then a lockout doubling from 30 s to 15 min
+  (`429` + `Retry-After`). Changing the PIN needs the current one and signs out other devices; the signed-in device list
+  can sign out one or all others. With a PIN on, every API call (streams and thumbnails included) needs a session; the
+  page itself loads so the sign-in screen can show. Forgotten PIN: start with `-reset-pin`.
+- **CSRF**: state-changing API requests carrying a foreign `Origin` (or `Sec-Fetch-Site: cross-site`) are refused.
+- **Backups** (`internal/backup`): manual and daily backups with `VACUUM INTO` (consistent while in use), keep N
+  automatic ones, download, delete. Names are validated against a strict pattern (no path traversal). Restore checks
+  the file (`quick_check`, schema version not newer than this build, required tables), stages it, and applies it on the
+  next start before the database opens, after saving the current library (including its WAL) as a "pre-restore" backup.
+- **UI**: sign-in screen (lockout countdown), Sign out in the sidebar, Settings split into General / Library /
+  Security / Backups / About tabs.
+
+Verified: Go tests incl. `-race` (PIN flow, throttling, CSRF, settings validation, restore across a restart, scheduler),
+a headless-Chrome run of every settings tab, lock → wrong PIN → unlock, and `-reset-pin` on the real binary.
 
 ## Phase 6: Release ⬜
 README and docs (architecture, API, database, security, deployment, development), release builds.

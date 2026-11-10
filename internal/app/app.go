@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"time"
 
+	"enstream/internal/auth"
+	"enstream/internal/backup"
 	"enstream/internal/config"
 	repo "enstream/internal/database/repositories"
 	"enstream/internal/jobs"
@@ -18,7 +20,8 @@ import (
 var Version = "0.1.0-dev"
 
 type App struct {
-	Config    *config.Config
+	Config    *config.Config // startup values (server, networks, tool paths)
+	Settings  *config.Live   // values the settings page can change
 	Paths     config.Paths
 	DB        *sql.DB
 	Log       *slog.Logger
@@ -28,4 +31,6 @@ type App struct {
 	StartedAt time.Time
 	Store     *repo.Store
 	Scanner   *jobs.Scanner
+	Auth      *auth.Service
+	Backups   *backup.Manager
 }

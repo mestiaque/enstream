@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"enstream/internal/auth"
+	"enstream/internal/backup"
 	"enstream/internal/config"
 	"enstream/internal/database"
 	repo "enstream/internal/database/repositories"
@@ -19,10 +21,11 @@ import (
 
 // Options come from the command line.
 type Options struct {
-	DataDir string
-	Host    string // overrides config when set
-	Port    int    // overrides config when > 0
-	Debug   bool
+	DataDir  string
+	Host     string // overrides config when set
+	Port     int    // overrides config when > 0
+	Debug    bool
+	ResetPIN bool // remove the PIN at start-up (forgotten PIN)
 }
 
 // Bootstrap loads configuration, opens the database, finds FFmpeg and the LAN addresses.
@@ -41,6 +44,7 @@ func Bootstrap(ctx context.Context, o Options) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	fileServer := cfg.Server
 	if o.Host != "" {
 		cfg.Server.Host = o.Host
 	}
@@ -51,11 +55,16 @@ func Bootstrap(ctx context.Context, o Options) (*App, error) {
 		return nil, err
 	}
 
+	if name, err := backup.ApplyPending(ctx, paths.Database(), paths.Backups); err != nil {
+		log.Error("restore failed; starting with the current library", "error", err)
+	} else if name != "" {
+		log.Info("library restored from backup", "backup", name)
+	}
 	db, err := database.Open(paths.Database())
 	if err != nil {
 		return nil, err
 	}
-	a := &App{Config: cfg, Paths: paths, DB: db, Log: log, StartedAt: time.Now()}
+	a := &App{Config: cfg, Settings: config.NewLive(cfg, fileServer), Paths: paths, DB: db, Log: log, StartedAt: time.Now()}
 	a.FFmpeg = media.FindTool(ctx, "ffmpeg", cfg.Media.FFmpegPath)
 	a.FFprobe = media.FindTool(ctx, "ffprobe", cfg.Media.FFprobePath)
 	for _, t := range []*media.Tool{a.FFmpeg, a.FFprobe} {
@@ -67,7 +76,20 @@ func Bootstrap(ctx context.Context, o Options) (*App, error) {
 	if err := a.Store.MarkInterruptedScans(ctx); err != nil {
 		log.Warn("could not close interrupted scans", "error", err)
 	}
-	a.Scanner = jobs.NewScanner(a.Store, cfg, paths, a.FFmpeg, a.FFprobe, log)
+	a.Scanner = jobs.NewScanner(a.Store, a.Settings, paths, a.FFmpeg, a.FFprobe, log)
+	a.Auth = &auth.Service{Store: a.Store, Throttle: auth.NewThrottle(), Log: log}
+	if err := a.Auth.Load(ctx); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if o.ResetPIN {
+		if err := a.Auth.Reset(ctx, nil); err != nil {
+			db.Close()
+			return nil, err
+		}
+		log.Warn("PIN removed (-reset-pin); every device can open ENStream without it")
+	}
+	a.Backups = &backup.Manager{DB: db, Dir: paths.Backups, DBPath: paths.Database()}
 	a.RefreshAddresses()
 	log.Info("ENStream starting", "version", Version, "data", paths.Data)
 	return a, nil

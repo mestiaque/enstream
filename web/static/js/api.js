@@ -47,7 +47,10 @@ export async function request(path, { method = "GET", body, signal, keepalive } 
   } catch {
     throw new ApiError(res.status, "BAD_RESPONSE", `The server answered ${res.status} without JSON`);
   }
-  if (!env.success) throw new ApiError(res.status, env.error?.code || "ERROR", env.error?.message || "Request failed");
+  if (!env.success) {
+    if (res.status === 401 && env.error?.code === "AUTH_REQUIRED") window.dispatchEvent(new CustomEvent("enstream:auth-required"));
+    throw new ApiError(res.status, env.error?.code || "ERROR", env.error?.message || "Request failed");
+  }
   return env;
 }
 

@@ -60,15 +60,15 @@ func scanVideo(row interface{ Scan(...any) error }) (Video, error) {
 
 // VideoQuery: the library filters. Zero values mean "any".
 type VideoQuery struct {
-	Page, Limit   int
-	Search        string
-	FolderID      int64
-	Extension     string // ".mkv"
-	Resolution    string // "4k" | "1080p" | "720p" | "sd"
-	Watched       string // "watched" | "unwatched" | "in_progress"
-	RecentDays    int    // added in the last N days
-	Sort          string // allowlisted below
-	Desc          bool
+	Page, Limit int
+	Search      string
+	FolderID    int64
+	Extension   string // ".mkv"
+	Resolution  string // "4k" | "1080p" | "720p" | "sd"
+	Watched     string // "watched" | "unwatched" | "in_progress"
+	RecentDays  int    // added in the last N days
+	Sort        string // allowlisted below
+	Desc        bool
 }
 
 // Sort keys map to fixed SQL; anything else falls back to the title.

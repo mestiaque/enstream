@@ -19,6 +19,7 @@ func main() {
 	flag.StringVar(&o.Host, "host", "", "address to listen on (default from config.json: 0.0.0.0)")
 	flag.IntVar(&o.Port, "port", 0, "port to listen on (default from config.json: 8080)")
 	flag.BoolVar(&o.Debug, "debug", false, "verbose logging")
+	flag.BoolVar(&o.ResetPIN, "reset-pin", false, "remove the PIN (if you forgot it) and start normally")
 	flag.Parse()
 	if *showVersion {
 		fmt.Println("ENStream", app.Version)

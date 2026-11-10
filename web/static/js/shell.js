@@ -14,6 +14,7 @@ const routes = [
   [/^\/watch\/(\d+)$/, () => import("./views/player.js"), "watch"],
   [/^\/folders$/, () => import("./views/folders.js"), "folders"],
   [/^\/settings$/, () => import("./views/settings.js"), "settings"],
+  [/^\/login$/, () => import("./views/login.js"), "login"],
 ];
 
 const NAV = [
@@ -34,6 +35,27 @@ const scrim = document.getElementById("scrim");
 const searchInput = document.getElementById("search");
 let current = null;
 let renderSeq = 0;
+let authRequired = false;
+let pinEnabled = false;
+
+// A PIN is set and this browser has no session: show the sign-in screen.
+window.addEventListener("enstream:auth-required", () => {
+  if (authRequired) return;
+  authRequired = true;
+  render();
+});
+export function signedIn(next) {
+  authRequired = false;
+  pinEnabled = true;
+  updateSignOut();
+  navigate(next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/login") ? next : "/", { replace: true });
+  pollScan();
+  refreshCount();
+}
+export function setPinEnabled(on) {
+  pinEnabled = on;
+  updateSignOut();
+}
 
 function buildNav() {
   const nav = document.getElementById("nav");
@@ -96,7 +118,11 @@ async function render() {
   const match = routes.find(([re]) => re.test(path));
   try { current?.destroy?.(); } catch (e) { console.error(e); }
   current = null;
-  document.body.classList.remove("watching");
+  document.body.classList.remove("watching", "signin");
+  if (authRequired && path !== "/login") {
+    history.replaceState({}, "", "/login?next=" + encodeURIComponent(location.pathname + location.search));
+    return render();
+  }
   if (!match) {
     clear(view).append(notFound());
     setActive("");
@@ -204,8 +230,8 @@ export async function pollScan() {
       }
     }
     setOnline(true);
-  } catch {
-    setOnline(false);
+  } catch (err) {
+    setOnline(err?.status !== 0);
   }
   const delay = lastStatus?.running ? 1000 : 15000;
   pollTimer = setTimeout(pollScan, document.hidden && !lastStatus?.running ? 60000 : delay);
@@ -217,7 +243,17 @@ const foot = document.getElementById("sidebar-foot");
 const dot = h("span", { class: "dot" });
 const footStatus = h("span", { text: "Connected" });
 const footVersion = h("span");
-foot.append(h("div", null, dot, footStatus), footVersion);
+const signOutBtn = h("button", { class: "btn ghost sm", type: "button", hidden: true, onclick: signOut }, icon("log-out", "sm"), "Sign out");
+foot.append(h("div", null, dot, footStatus), footVersion, signOutBtn);
+function updateSignOut() {
+  signOutBtn.hidden = !pinEnabled || authRequired;
+}
+async function signOut() {
+  try { await request("/auth/logout", { method: "POST" }); } catch { /* ignore */ }
+  authRequired = true;
+  updateSignOut();
+  navigate("/login", { replace: true });
+}
 
 function setOnline(on) {
   dot.classList.toggle("off", !on);
@@ -234,6 +270,12 @@ export async function refreshCount() {
 
 export async function boot() {
   buildNav();
+  try {
+    const st = await get("/auth/status");
+    pinEnabled = st.pin_enabled;
+    authRequired = !st.authenticated;
+  } catch { /* offline: the page shows the error */ }
+  updateSignOut();
   render();
   pollScan();
   refreshCount();
