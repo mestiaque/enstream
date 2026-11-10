@@ -1,4 +1,4 @@
-import { h, icon, setIcon, fmtDuration, isTyping, swap } from "../dom.js";
+import { h, icon, setIcon, niceTitle, fmtDuration, isTyping, swap } from "../dom.js";
 import { get, send, beacon, streamURL, thumbURL, ApiError } from "../api.js";
 import { emptyState, link, copyText, toast } from "../ui.js";
 import { prefs, setPref, queueAround } from "../store.js";
@@ -72,7 +72,7 @@ export async function render(ctx) {
   const overlay = h("div", { class: "p-overlay", hidden: true, onclick: (e) => e.stopPropagation() });
 
   const top = h("div", { class: "p-top" }, btn("arrow-left", "Back (Esc)", () => leave()),
-    h("div", { class: "p-title" }, h("strong", { text: v.title }), h("small", { text: q.label && (q.prev || q.next) ? `${v.folder_name} · ${q.label}` : v.folder_name })));
+    h("div", { class: "p-title" }, h("strong", { text: niceTitle(v.title) }), h("small", { text: q.label && (q.prev || q.next) ? `${v.folder_name} · ${q.label}` : v.folder_name })));
   if (desktop.available) {
     top.append(windowControls());
     makeDraggable(top);
@@ -359,7 +359,7 @@ export async function render(ctx) {
         }, 1000);
       }
     } else {
-      swap(overlay, h("div", { class: "p-card" }, icon("check", "xl"), h("h3", { text: "Finished" }), h("p", { text: v.title }),
+      swap(overlay, h("div", { class: "p-card" }, icon("check", "xl"), h("h3", { text: "Finished" }), h("p", { text: niceTitle(v.title) }),
         h("div", { class: "actions" }, h("button", { class: "btn", type: "button", onclick: () => { overlay.hidden = true; video.currentTime = 0; video.play().catch(() => {}); } }, icon("rotate-ccw", "sm"), "Watch again"),
           h("button", { class: "btn primary", type: "button", onclick: () => leave() }, icon("arrow-left", "sm"), "Back"))));
       overlay.hidden = false;
@@ -469,7 +469,7 @@ export async function render(ctx) {
   // Lock-screen / headset controls on phones.
   if ("mediaSession" in navigator) {
     try {
-      navigator.mediaSession.metadata = new MediaMetadata({ title: v.title, artist: "ENStream", album: v.folder_name, artwork: v.has_thumbnail ? [{ src: thumbURL(v), type: "image/webp" }] : [] });
+      navigator.mediaSession.metadata = new MediaMetadata({ title: niceTitle(v.title), artist: "ENStream", album: v.folder_name, artwork: v.has_thumbnail ? [{ src: thumbURL(v), type: "image/webp" }] : [] });
       const ms = navigator.mediaSession;
       ms.setActionHandler("play", () => video.play());
       ms.setActionHandler("pause", () => video.pause());

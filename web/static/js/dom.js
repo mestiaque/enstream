@@ -118,3 +118,8 @@ export function swap(el, ...children) {
   clear(el);
   return append(el, children);
 }
+
+/** File-name style titles ("some-video-name_1080p") read better with spaces. */
+export function niceTitle(t = "") {
+  return /\s/.test(t) ? t : t.replace(/[-_.]+/g, " ").trim() || t;
+}

@@ -1,4 +1,4 @@
-import { h, icon, fmtDuration, fmtSize, fmtDate, fmtAgo, resolutionLabel, swap } from "../dom.js";
+import { h, icon, niceTitle, fmtDuration, fmtSize, fmtDate, fmtAgo, resolutionLabel, swap } from "../dom.js";
 import { get, send, streamURL, ApiError } from "../api.js";
 import { errorState, emptyState, link, toast, toastError, copyText } from "../ui.js";
 import { thumbnail } from "../components.js";
@@ -74,38 +74,39 @@ export async function render(ctx) {
         draw();
       } catch (err) { toastError(err); }
     };
+    const copyLink = () => copyText(new URL(streamURL(v.id), location.origin).href, "Stream link copied");
     const actions = h("div", { class: "details-actions" },
-      link(`/watch/${v.id}`, { class: "btn grad lg" }, icon("play"), resume ? `Resume from ${fmtDuration(d.resume_from)}` : "Play"),
+      link(`/watch/${v.id}`, { class: "btn grad lg play-main" }, icon("play"), resume ? `Resume from ${fmtDuration(d.resume_from)}` : "Play"),
       resume ? link(`/watch/${v.id}?t=0`, { class: "btn lg" }, icon("rotate-ccw"), "Start over") : null,
       !v.completed ? h("button", { class: "btn lg", type: "button", onclick: markWatched }, icon("check"), "Mark watched") : null,
-      v.last_played_at ? h("button", { class: "btn lg ghost", type: "button", onclick: forget }, icon("x"), "Reset progress") : null,
-      h("button", { class: "btn lg ghost", type: "button", title: "For VLC or another player on this network", onclick: () => copyText(new URL(streamURL(v.id), location.origin).href, "Stream link copied") }, icon("copy"), "Copy stream link"));
+      v.last_played_at ? h("button", { class: "btn lg", type: "button", onclick: forget }, icon("x"), "Reset") : null,
+      h("button", { class: "btn lg", type: "button", title: "Copy the stream link for VLC or another player on this network", onclick: copyLink }, icon("copy"), "Copy link"));
 
     const tech = [
-      ["File", v.file_name],
-      ["Location", `${v.folder_name} / ${v.relative_path}`],
-      ["Container", container(v)],
+      ["File", `${v.folder_name} / ${v.relative_path}`, "mono"],
       ["Video", [v.video_codec?.toUpperCase(), v.video_profile, v.width ? `${v.width}×${v.height}` : "", v.fps ? `${Math.round(v.fps * 100) / 100} fps` : ""].filter(Boolean).join(" · ") || "—"],
       ["Audio", [v.audio_codec?.toUpperCase(), channels(v.audio_channels)].filter(Boolean).join(" · ") || "None"],
-      ["Bitrate", v.bitrate ? `${(v.bitrate / 1e6).toFixed(1)} Mbit/s` : "—"],
-      ["Subtitles", d.subtitles.length ? d.subtitles.map((s) => s.label).join(", ") : "None found next to the file"],
+      ["Format", [container(v), v.bitrate ? `${(v.bitrate / 1e6).toFixed(1)} Mbit/s` : ""].filter(Boolean).join(" · ")],
+      d.subtitles.length ? ["Subtitles", d.subtitles.map((s) => s.label).join(", ")] : null,
       ["Added", fmtDate(v.created_at)],
-      ["Last played", v.last_played_at ? `${fmtAgo(v.last_played_at)} (${fmtDate(v.last_played_at)})` : "Never"],
-    ];
+      v.last_played_at ? ["Last played", `${fmtAgo(v.last_played_at)} (${fmtDate(v.last_played_at)})`] : null,
+    ].filter(Boolean);
 
-    swap(el, 
+    // Only formats that may not play get a note; "plays in most browsers" is the normal case.
+    const note = v.compatibility === "likely" ? null : h("div", { class: `compat ${cls}` }, icon(ic), h("div", null, h("strong", { text: title }), text));
+
+    swap(el,
       h("button", { class: "back-link", type: "button", onclick: () => (history.length > 1 ? history.back() : ctx.navigate("/library")) }, icon("arrow-left", "sm"), "Back"),
       h("div", { class: "details" },
-        h("div", null, link(`/watch/${v.id}`, { "aria-label": "Play" }, poster)),
-        h("div", null,
-          h("h1", { class: "details-title", text: v.title }),
-          h("p", { class: "details-sub", text: v.folder_name }),
+        link(`/watch/${v.id}`, { class: "details-poster", "aria-label": "Play" }, poster),
+        h("div", { class: "details-side" },
+          h("h1", { class: "details-title", title: v.title, text: niceTitle(v.title) }),
+          h("p", { class: "details-sub" }, icon("folder", "sm"), v.folder_name),
           h("div", { class: "chips" }, chips),
           actions,
-          h("div", { class: `compat ${cls}` }, icon(ic), h("div", null, h("strong", { text: title }), text)))),
-      h("section", { class: "section panel" }, h("div", { class: "panel-head" }, h("h2", { text: "File details" })),
-        h("dl", { class: "kv panel-body" }, tech.flatMap(([k, val]) => [h("dt", { text: k }), h("dd", { text: val })]))));
+          note,
+          h("dl", { class: "kv details-kv" }, tech.flatMap(([k, val, c]) => [h("dt", { text: k }), h("dd", { class: c || null, text: val })])))));
   };
   draw();
-  return { el, title: v.title };
+  return { el, title: niceTitle(v.title) };
 }

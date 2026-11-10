@@ -1,4 +1,4 @@
-import { h, icon, append, fmtDuration, fmtSize, fmtAgo, resolutionLabel } from "./dom.js";
+import { h, icon, append, niceTitle, fmtDuration, fmtSize, fmtAgo, resolutionLabel } from "./dom.js";
 import { thumbURL } from "./api.js";
 import { setQueue, prefs } from "./store.js";
 import { link } from "./ui.js";
@@ -53,7 +53,7 @@ export function videoCard(v, { list = [v], label = "", meta = "folder" } = {}) {
   attachPreview(thumb, v);
   return h("article", { class: `card ${!v.last_played_at ? "unwatched" : ""}` },
     link(`/video/${v.id}`, { "aria-hidden": "true", tabindex: "-1", onclick: remember(list, label) }, thumb),
-    h("div", { class: "card-body" }, link(`/video/${v.id}`, { class: "card-title", title: v.title, onclick: remember(list, label) }, v.title),
+    h("div", { class: "card-body" }, link(`/video/${v.id}`, { class: "card-title", title: v.title, onclick: remember(list, label) }, niceTitle(v.title)),
       h("div", { class: "card-meta", text: metaLine(v, meta) })));
 }
 
@@ -63,7 +63,7 @@ export function videoRow(v, { list = [v], label = "", meta = "folder", side } = 
   const res = resolutionLabel(v.width, v.height);
   return h("div", { class: "row" },
     link(`/video/${v.id}`, { "aria-hidden": "true", tabindex: "-1", onclick: remember(list, label) }, thumb),
-    h("div", { class: "row-main" }, link(`/video/${v.id}`, { class: "card-title", title: v.title, onclick: remember(list, label) }, v.title),
+    h("div", { class: "row-main" }, link(`/video/${v.id}`, { class: "card-title", title: v.title, onclick: remember(list, label) }, niceTitle(v.title)),
       h("div", { class: "row-meta" }, h("span", { text: metaLine(v, meta) }), res ? h("span", { text: res }) : null,
         v.video_codec ? h("span", { text: v.video_codec.toUpperCase() }) : null, h("span", { class: "hide-sm", text: v.relative_path }))),
     h("div", { class: "row-side" }, side || [v.completed ? h("span", { class: "badge ok" }, icon("check", "sm"), "Watched") : null,
