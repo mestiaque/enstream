@@ -32,8 +32,13 @@ ENPost). Legend: ✅ implemented and tested · 🔶 implemented, not fully teste
 - ✅ Tests: path containment and symlink escape, ffprobe parsing, compatibility, subtitle matching, discovery, real FFmpeg scan integration (generated clips), API integration (validation, SQL injection attempts, overlap, removal)
 - ✅ Measured: 520 generated clips scanned in 28.5 s (3 workers, every file thumbnailed); rescan with no changes 0.34 s; first library page 10 ms
 
-## Phase 3: Streaming ⬜
-`/videos/{id}/stream` with GET/HEAD, Range 206/416 via `http.ServeContent`, path containment and symlink checks, MIME types, concurrent clients.
+## Phase 3: Streaming ✅
+
+- ✅ `GET`/`HEAD /api/v1/videos/{id}/stream` through `http.ServeContent`: Range (single, open-ended, suffix, clamped end, multiple as multipart/byteranges), 206, 416 with `bytes */size`, If-Range with an ETag, HEAD, correct Content-Length, `inline` (never forced downloads), MIME type from the extension
+- ✅ The stored path is re-checked on every request (symlinks resolved, must stay inside its registered folder); disabled folders, deleted files and escapes give a clean 404
+- ✅ Chunked reads from disk, kernel sendfile kept through the logging middleware, no write timeout (long streams), client disconnects end the copy
+- ✅ Tests: every range form, malformed ranges, HEAD, If-Range, 20 concurrent clients reading different ranges, invalid ids, symlink escape, deleted file
+- ✅ Checked on the real binary over the LAN address: HEAD 200, range 206, out-of-range 416; FFprobe read the video over HTTP by seeking with ranges
 
 ## Phase 4: Frontend ⬜
 Dashboard, library (grid/list, search, sort, filters, pagination, lazy thumbnails), details, custom player, mobile layout.

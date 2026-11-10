@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"io"
 	"log/slog"
 	"net/http"
 	"runtime/debug"
@@ -58,6 +59,22 @@ func (s *statusWriter) Flush() {
 }
 
 func (s *statusWriter) Unwrap() http.ResponseWriter { return s.ResponseWriter }
+
+// ReadFrom keeps the kernel's sendfile path for file responses (video streams).
+func (s *statusWriter) ReadFrom(src io.Reader) (int64, error) {
+	if s.status == 0 {
+		s.status = http.StatusOK
+	}
+	var n int64
+	var err error
+	if rf, ok := s.ResponseWriter.(io.ReaderFrom); ok {
+		n, err = rf.ReadFrom(src)
+	} else {
+		n, err = io.Copy(s.ResponseWriter, src)
+	}
+	s.bytes += n
+	return n, err
+}
 
 // Logging assigns a request id and logs each request (method, path, status, duration).
 // Query strings are not logged.

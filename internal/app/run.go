@@ -11,6 +11,7 @@ import (
 	"enstream/internal/network"
 	"enstream/internal/security"
 	"enstream/internal/server"
+	"enstream/internal/streaming"
 	"enstream/web"
 )
 
@@ -42,6 +43,7 @@ func (a *App) Handler() (http.Handler, error) {
 	folders := &handlers.Folders{Store: a.Store, Scanner: a.Scanner, Log: a.Log}
 	scans := &handlers.Scanner{Store: a.Store, Scanner: a.Scanner, Log: a.Log}
 	videos := &handlers.Videos{Store: a.Store, Paths: a.Paths, Log: a.Log}
+	stream := &streaming.Handler{Store: a.Store, Log: a.Log}
 	front, err := server.Frontend(web.Files, Version)
 	if err != nil {
 		return nil, err
@@ -72,6 +74,8 @@ func (a *App) Handler() (http.Handler, error) {
 			r.Get("/videos/extensions", videos.Extensions)
 			r.Get("/videos/{id}", videos.Get)
 			r.Get("/videos/{id}/thumbnail", videos.Thumbnail)
+			r.Get("/videos/{id}/stream", stream.Stream)
+			r.Head("/videos/{id}/stream", stream.Stream)
 		},
 		Frontend: front,
 	}), nil
