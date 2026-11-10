@@ -1,0 +1,27 @@
+// Package app wires ENStream together: configuration, database, tools, services and the
+// HTTP server, and runs them until the process is asked to stop.
+package app
+
+import (
+	"database/sql"
+	"log/slog"
+	"time"
+
+	"enstream/internal/config"
+	"enstream/internal/media"
+	"enstream/internal/network"
+)
+
+// Version is set at build time: -ldflags "-X enstream/internal/app.Version=1.2.3".
+var Version = "0.1.0-dev"
+
+type App struct {
+	Config    *config.Config
+	Paths     config.Paths
+	DB        *sql.DB
+	Log       *slog.Logger
+	FFmpeg    *media.Tool
+	FFprobe   *media.Tool
+	Addresses []network.Address
+	StartedAt time.Time
+}

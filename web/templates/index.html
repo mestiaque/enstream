@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f1013" />
+    <title>ENStream</title>
+    <link rel="icon" href="/static/assets/enstream-icon.svg?v={{VERSION}}" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/css/app.css?v={{VERSION}}" />
+  </head>
+  <body>
+    <main class="boot" id="app">
+      <img src="/static/assets/enstream-icon.svg?v={{VERSION}}" alt="" width="72" height="72" />
+      <h1>ENStream</h1>
+      <p class="muted">Your Personal Cinema</p>
+      <section class="card" aria-live="polite">
+        <div class="row"><span>Server</span><strong id="status">Connecting…</strong></div>
+        <div class="row"><span>Version</span><span id="version">…</span></div>
+        <div class="row"><span>FFmpeg</span><span id="ffmpeg">…</span></div>
+        <div class="row"><span>FFprobe</span><span id="ffprobe">…</span></div>
+        <div class="urls"><span>Open on your phone, TV or another computer</span><ul id="urls"></ul></div>
+      </section>
+      <p class="muted small">The video library arrives in the next development phase.</p>
+    </main>
+    <script src="/static/js/boot.js?v={{VERSION}}"></script>
+  </body>
+</html>

@@ -1,0 +1,6 @@
+/dist/
+/enstream
+/enstream.exe
+*.test
+/coverage.out
+/.data/
