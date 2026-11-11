@@ -38,6 +38,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         with:
           name: server
+          if-no-files-found: error
           path: dist/enstream-server-*
 
   desktop:
@@ -91,18 +92,20 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Bundled server
         run: ./scripts/build-sidecar.sh ${{ matrix.sidecar }}
+      # Absolute: Tauri runs cargo inside src-tauri, so a relative path would land there.
       - run: cargo test --manifest-path src-tauri/Cargo.toml
         env:
-          CARGO_TARGET_DIR: target
+          CARGO_TARGET_DIR: ${{ github.workspace }}/desktop/target
       - name: Bundle
         if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         run: pnpm tauri build --bundles ${{ matrix.bundles }}
         env:
-          CARGO_TARGET_DIR: target
+          CARGO_TARGET_DIR: ${{ github.workspace }}/desktop/target
       - uses: actions/upload-artifact@v4
         if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         with:
           name: desktop-${{ matrix.os }}
+          if-no-files-found: error
           path: |
             desktop/target/release/bundle/deb/*.deb
             desktop/target/release/bundle/appimage/*.AppImage
