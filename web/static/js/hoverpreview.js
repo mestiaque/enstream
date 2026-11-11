@@ -36,13 +36,13 @@ export function attachPreview(thumb, v) {
     clearTimeout(timer);
     if (active?.thumb === thumb) stop();
   });
-  touchToPreview(thumb, () => (hasClip ? startClip(thumb, v, { fallback: false }) : start(thumb, v)));
+  touchToPreview(thumb, () => (hasClip ? startClip(thumb, v) : start(thumb, v)));
 }
 
 // Touch: any touch on a card plays its preview at once, also a finger that lands on it while
 // scrolling. It keeps playing until the card scrolls away or another card is touched. A tap
-// still opens the video. Touch uses the server clip only (a missing clip is queued, not
-// replaced by streaming the original file, which would make scrolling heavy).
+// still opens the video. Like the mouse, a video without a clip yet plays pieces of the
+// original file (one preview at a time, so touching the next card ends that download).
 function touchToPreview(thumb, go) {
   thumb.addEventListener("pointerdown", (e) => {
     if (e.pointerType !== "touch" || !enabled() || active?.thumb === thumb) return;
@@ -73,7 +73,7 @@ function makeVideo() {
 }
 
 // The server clip: one small looping file; the bars follow its playback.
-function startClip(thumb, v, { fallback = true } = {}) {
+function startClip(thumb, v) {
   stop();
   const video = makeVideo();
   video.loop = true;
@@ -106,7 +106,7 @@ function startClip(thumb, v, { fallback = true } = {}) {
   // No clip yet (404) or it cannot be read: play pieces of the original file instead.
   video.addEventListener("error", () => {
     if (state.stopped) return;
-    if (!fallback || v.compatibility === "transcode") return stop();
+    if (v.compatibility === "transcode") return stop();
     start(thumb, v);
   }, { once: true });
   state.cleanup = () => cancelAnimationFrame(state.frame);
