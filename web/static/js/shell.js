@@ -114,8 +114,11 @@ function buildTopbar() {
   const moreBtn = h("button", { class: "icon-btn", type: "button", "aria-label": "More", title: "More" }, icon("more-horizontal"));
   moreBtn.addEventListener("click", () => openMenu(moreBtn, moreEntries()));
   const gear = h("button", { class: "icon-btn", type: "button", "aria-label": "Settings", title: "Settings (Ctrl+,)", onclick: () => openSettingsDialog() }, icon("settings"));
-  if (isHost()) right.append(scanBtn, addBtn, h("span", { class: "tb-sep hide-sm" }));
-  right.append(themeBtn, moreBtn, gear);
+  const items = [...(isHost() ? [scanBtn, addBtn, h("span", { class: "tb-sep hide-sm" })] : []), themeBtn, moreBtn, gear];
+  // In the desktop app the window buttons (added earlier) stay at the far right.
+  const winControls = right.querySelector(".win-controls");
+  if (winControls) winControls.before(...items, h("span", { class: "tb-sep" }));
+  else right.append(...items);
 }
 
 const THEMES = [["dark", "Dark", "moon"], ["light", "Light", "sun"], ["glass", "Glass", "sparkles"], ["system", "System", "monitor"]];
