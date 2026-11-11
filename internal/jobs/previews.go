@@ -143,6 +143,11 @@ func (p *Previewer) make(ctx context.Context, it repo.PreviewItem) bool {
 	}
 	start := time.Now()
 	if err := media.Preview(ctx, p.FFmpeg, it.Path, dest, it.Duration); err != nil {
+		// A file that is gone right now (an external drive was unplugged or dropped out) is
+		// tried again on a later pass; only files that exist but don't convert are skipped.
+		if _, statErr := os.Stat(it.Path); statErr != nil {
+			return false
+		}
 		if ctx.Err() == nil {
 			p.mu.Lock()
 			p.failed[it.ID] = true

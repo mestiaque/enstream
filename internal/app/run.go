@@ -105,6 +105,7 @@ func (a *App) Handler() (http.Handler, error) {
 			r.Get("/videos/{id}/preview", videos.Preview)
 			r.Get("/videos/{id}/stream", stream.Stream)
 			r.Head("/videos/{id}/stream", stream.Stream)
+			r.Get("/videos/{id}/check", stream.Check)
 			r.Get("/videos/{id}/subtitles/{sid}", videos.Subtitle)
 			r.Put("/videos/{id}/progress", play.Progress)
 			r.Post("/videos/{id}/progress", play.Progress) // navigator.sendBeacon

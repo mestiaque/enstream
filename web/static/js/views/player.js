@@ -367,15 +367,42 @@ export async function render(ctx) {
     cleanups.push(() => clearInterval(countdown));
   }
 
-  function showError(err) {
+  // The <video> element reports a server error (404, 500…) or a drive that stopped answering
+  // exactly like a codec it can't decode (MEDIA_ERR_SRC_NOT_SUPPORTED), so ask the server,
+  // which also tries to read the file; null = the file is fine.
+  async function streamProblem() {
+    try {
+      const res = await fetch(`/api/v1/videos/${id}/check`, { cache: "no-store" });
+      if (res.ok) return null;
+      const env = await res.json().catch(() => null);
+      return { code: env?.error?.code || "HTTP_" + res.status, message: env?.error?.message || `The server answered ${res.status}.` };
+    } catch {
+      return { code: "OFFLINE", message: "Can't reach the ENStream server. Is it still running?" };
+    }
+  }
+
+  async function showError(err) {
     spinner.hidden = true;
-    const unsupported = err && (err.code === 3 || err.code === 4);
+    const problem = err && (err.code === 3 || err.code === 4) ? await streamProblem() : null;
+    const unsupported = err && (err.code === 3 || err.code === 4) && !problem;
     const streamLink = new URL(streamURL(id), location.origin).href;
+    const title = problem
+      ? problem.code === "FOLDER_OFFLINE" ? "The drive isn't connected" : problem.code === "FILE_MISSING" ? "Video file not found" : problem.code === "READ_ERROR" ? "The drive can't read this file" : "Can't load this video"
+      : unsupported ? "This browser can't play this file" : "Playback stopped";
+    // Electron apps (VS Code's Simple Browser and preview tabs) ship Chromium without an AAC
+    // decoder, so MP4 files with AAC sound (nearly all of them) can't play there at all.
+    const embedded = /\bElectron\//.test(navigator.userAgent);
+    const text = problem
+      ? problem.message
+      : unsupported && embedded
+        ? `You're in a built-in app browser (like VS Code's Simple Browser). It can't play ${v.audio_codec ? v.audio_codec.toUpperCase() + " sound" : "the sound of most videos"}, so the video won't start. Open this page in Chrome, Firefox or the ENStream app instead.`
+        : unsupported ? `${(v.video_codec || "This").toUpperCase()} video${v.audio_codec ? ` with ${v.audio_codec.toUpperCase()} sound` : ""} in ${v.extension.replace(".", "").toUpperCase()} isn't supported here. Try another browser, or open the stream link in VLC.` : "The connection to the server was interrupted.";
     swap(overlay, h("div", { class: "p-card" }, icon("circle-alert", "xl"),
-      h("h3", { text: unsupported ? "This browser can't play this file" : "Playback stopped" }),
-      h("p", { text: unsupported ? `${(v.video_codec || "This").toUpperCase()} video in ${v.extension.replace(".", "").toUpperCase()} isn't supported here. Try another browser, or open the stream link in VLC.` : "The connection to the server was interrupted." }),
+      h("h3", { text: title }),
+      h("p", { text }),
       h("div", { class: "actions" },
-        unsupported ? h("button", { class: "btn", type: "button", onclick: () => copyText(streamLink, "Stream link copied") }, icon("copy", "sm"), "Copy stream link")
+        unsupported && embedded ? h("button", { class: "btn", type: "button", onclick: () => copyText(location.href, "Page link copied — paste it in Chrome or Firefox") }, icon("copy", "sm"), "Copy page link")
+          : unsupported ? h("button", { class: "btn", type: "button", onclick: () => copyText(streamLink, "Stream link copied") }, icon("copy", "sm"), "Copy stream link")
           : h("button", { class: "btn primary", type: "button", onclick: retry }, icon("refresh-cw", "sm"), "Retry"),
         h("button", { class: "btn", type: "button", onclick: () => leave() }, icon("arrow-left", "sm"), "Back"))));
     overlay.hidden = false;

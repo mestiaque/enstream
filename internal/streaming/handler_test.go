@@ -51,6 +51,7 @@ func setup(t *testing.T) *fixture {
 	r := chi.NewRouter()
 	r.Get("/videos/{id}/stream", h.Stream)
 	r.Head("/videos/{id}/stream", h.Stream)
+	r.Get("/videos/{id}/check", h.Check)
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
 	return &fixture{srv: srv, content: content, path: path, id: id, store: store}
@@ -195,5 +196,45 @@ func TestSecurity(t *testing.T) {
 	os.Remove(f.path)
 	if res, _ := f.get(t, "GET", ""); res.StatusCode != 404 {
 		t.Fatalf("deleted file: %d", res.StatusCode)
+	}
+}
+
+func TestMissingFileAndOfflineFolder(t *testing.T) {
+	f := setup(t)
+	os.Remove(f.path)
+	res, body := f.get(t, "GET", "bytes=0-0")
+	if res.StatusCode != 404 || !strings.Contains(string(body), "FILE_MISSING") {
+		t.Fatalf("missing file: %d %s", res.StatusCode, body)
+	}
+	// The whole folder disappears, like an unmounted drive.
+	os.RemoveAll(filepath.Dir(f.path))
+	res, body = f.get(t, "GET", "bytes=0-0")
+	if res.StatusCode != 404 || !strings.Contains(string(body), "FOLDER_OFFLINE") || !strings.Contains(string(body), "external drive") {
+		t.Fatalf("offline folder: %d %s", res.StatusCode, body)
+	}
+}
+
+func TestCheck(t *testing.T) {
+	f := setup(t)
+	check := func() (int, string) {
+		res, err := http.Get(fmt.Sprintf("%s/videos/%d/check", f.srv.URL, f.id))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		b, _ := io.ReadAll(res.Body)
+		return res.StatusCode, string(b)
+	}
+	if code, body := check(); code != 200 || !strings.Contains(body, `"readable":true`) {
+		t.Fatalf("readable file: %d %s", code, body)
+	}
+	// A file shorter than the probe size is fine too.
+	os.WriteFile(f.path, []byte("tiny"), 0o644)
+	if code, body := check(); code != 200 {
+		t.Fatalf("tiny file: %d %s", code, body)
+	}
+	os.Remove(f.path)
+	if code, body := check(); code != 404 || !strings.Contains(body, "FILE_MISSING") {
+		t.Fatalf("missing file: %d %s", code, body)
 	}
 }
