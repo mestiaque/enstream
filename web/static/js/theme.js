@@ -4,7 +4,7 @@
   var p = {};
   try { p = JSON.parse(localStorage.getItem("enstream.prefs") || "{}"); } catch (e) {}
   var theme = p.theme || "dark";
-  var dark = theme === "system" ? !(window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches) : theme !== "light";
+  var dark = theme === "system" ? !(window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches) : theme === "dark";
   var c = document.documentElement.classList;
   c.remove("dark", "light", "glass");
   c.add(dark ? "dark" : "light");

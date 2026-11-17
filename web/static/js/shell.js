@@ -2,7 +2,7 @@ import { h, icon, clear, swap, isTyping, fmtNumber } from "./dom.js";
 import { get, request } from "./api.js";
 import { toast, openMenu, copyText } from "./ui.js";
 import { initDesktop, desktop, openExternal } from "./desktop.js";
-import { prefs, setPref, applyAppearance } from "./store.js";
+import { prefs, setPref } from "./store.js";
 import { isHost, setHost } from "./role.js";
 
 // ------------------------------------------------------------------ routes
@@ -108,21 +108,15 @@ function buildTopbar() {
   const right = document.getElementById("tb-right");
   const scanBtn = h("button", { class: "icon-btn", type: "button", "aria-label": "Scan library", title: "Scan library", onclick: scanNow }, icon("refresh-cw"));
   const addBtn = h("a", { class: "icon-btn hide-sm", href: "/folders", "data-link": "", "aria-label": "Add folder", title: "Add folder" }, icon("folder-plus"));
-  const themeBtn = h("button", { class: "icon-btn", type: "button", "aria-label": "Theme", title: "Theme" }, icon(themeIcon()));
-  themeBtn.addEventListener("click", () => openMenu(themeBtn, THEMES.map(([id, label, ic]) => ({ label, icon: ic, checked: prefs().theme === id || (!prefs().theme && id === "dark"),
-    onSelect: () => { setPref("theme", id); applyAppearance(); swap(themeBtn, icon(themeIcon())); } }))));
   const moreBtn = h("button", { class: "icon-btn", type: "button", "aria-label": "More", title: "More" }, icon("more-horizontal"));
   moreBtn.addEventListener("click", () => openMenu(moreBtn, moreEntries()));
   const gear = h("button", { class: "icon-btn", type: "button", "aria-label": "Settings", title: "Settings (Ctrl+,)", onclick: () => openSettingsDialog() }, icon("settings"));
-  const items = [...(isHost() ? [scanBtn, addBtn, h("span", { class: "tb-sep hide-sm" })] : []), themeBtn, moreBtn, gear];
+  const items = [...(isHost() ? [scanBtn, addBtn, h("span", { class: "tb-sep hide-sm" })] : []), moreBtn, gear];
   // In the desktop app the window buttons (added earlier) stay at the far right.
   const winControls = right.querySelector(".win-controls");
   if (winControls) winControls.before(...items, h("span", { class: "tb-sep" }));
   else right.append(...items);
 }
-
-const THEMES = [["dark", "Dark", "moon"], ["light", "Light", "sun"], ["glass", "Glass", "sparkles"], ["system", "System", "monitor"]];
-const themeIcon = () => (THEMES.find(([id]) => id === (prefs().theme || "dark")) || THEMES[0])[2];
 
 function moreEntries() {
   const list = [
@@ -312,6 +306,9 @@ const scanIcon = h("span", { class: "status-item" });
 statusRight.classList.add("status-item");
 statusRight.append(scanIcon, scanText, online);
 let lastStatus = null;
+// The last finished scan this window has seen. A scan can start and finish between two polls (a
+// small folder added from a phone or a browser), so a new finished job also means "the library changed".
+let lastJobId = null;
 let pollTimer;
 
 function updateStatusLeft() {
@@ -328,6 +325,10 @@ export async function pollScan() {
     const s = await get("/scanner/status");
     const wasRunning = lastStatus?.running;
     lastStatus = s;
+    const seenJob = lastJobId;
+    if (!s.running && s.job) lastJobId = s.job.id;
+    const missedScan = !s.running && s.job && seenJob !== null && s.job.id !== seenJob;
+    if (!s.running && seenJob === null && !s.job) lastJobId = 0;
     window.dispatchEvent(new CustomEvent("enstream:scan", { detail: s }));
     if (s.running) {
       const j = s.job;
@@ -337,6 +338,9 @@ export async function pollScan() {
       swap(scanIcon);
       const j = s.job;
       scanText.textContent = j?.status === "failed" ? "Last scan failed" : j ? `Library up to date${j.new_files ? ` · ${fmtNumber(j.new_files)} new` : ""}` : "Not scanned yet";
+      if (missedScan && !wasRunning) {
+        window.dispatchEvent(new CustomEvent("enstream:library-changed"));
+      }
       if (wasRunning && j) {
         if (j.status === "completed") toast("Library scan finished", { type: "success", detail: `${j.new_files} new · ${j.updated_files} updated · ${j.removed_files} removed${j.failed_files ? ` · ${j.failed_files} failed` : ""}` });
         else if (j.status === "failed") toast("Scan failed", { type: "error", detail: j.error_message });

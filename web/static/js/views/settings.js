@@ -198,7 +198,7 @@ export function openSettings(tab) {
     }));
     drawSw();
     return [
-      h("div", { class: "setting-block" }, h("strong", { text: "Theme" }), cards, h("p", { class: "hint", text: "Glass uses frosted, blurred panels over a colour gradient. Saved for this device." })),
+      h("div", { class: "setting-block" }, h("strong", { text: "Theme" }), cards, h("p", { class: "hint", text: "Glass: light, frosted panels over flowing ribbons in the accent colour. Saved for this device." })),
       row("Accent color", null, sw),
       choose("Library layout", "How All Videos is shown", [["grid", "Grid"], ["list", "List"]], p.view || "grid", (v) => { setPref("view", v); window.dispatchEvent(new CustomEvent("enstream:library-changed")); }),
       toggle("Video previews", "Resting the mouse on a video, or touching it on a touch screen, plays a short muted preview. Saved for this device.", p.hoverPreview !== false, (v) => setPref("hoverPreview", v)),

@@ -43,7 +43,7 @@ const mq = window.matchMedia ? matchMedia("(prefers-color-scheme: light)") : nul
 export function applyAppearance() {
   const p = prefs();
   const theme = p.theme || "dark";
-  const dark = theme === "system" ? !(mq && mq.matches) : theme !== "light";
+  const dark = theme === "system" ? !(mq && mq.matches) : theme === "dark";
   const c = document.documentElement.classList;
   c.remove("dark", "light", "glass");
   c.add(dark ? "dark" : "light");
